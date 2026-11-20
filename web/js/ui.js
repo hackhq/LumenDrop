@@ -51,8 +51,20 @@ const UI = (() => {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     },
 
+    // A deploy installs a new service worker in the background. Once it takes over, reload
+    // so the page matches it, unless a transfer is on screen (sending, scanning, or a
+    // received file not yet saved); that page picks the update up on its next load.
     registerSW() {
-      if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+      if (!("serviceWorker" in navigator)) return;
+      const updating = !!navigator.serviceWorker.controller; // false on the very first visit
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        const busy = ["playing", "scanning", "done"].includes(document.body.dataset.state);
+        if (!updating || reloading || busy) return;
+        reloading = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register("sw.js").catch(() => {});
     },
   };
 })();

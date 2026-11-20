@@ -53,7 +53,10 @@ const FILES = {{FILES}};
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      // "reload" skips the HTTP cache, so a new version never precaches an old file.
+      .then((cache) => cache.addAll(FILES.map((url) => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 

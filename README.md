@@ -105,8 +105,8 @@ WantedBy=multi-user.target
 ```
 
 The server listens on `127.0.0.1` by default so it is reachable only through the proxy.
-Each start generates `sw.js` from a hash of the embedded files, so after a deploy the
-browsers pick up the new version on their next visit.
+Each start generates `sw.js` from a hash of the embedded files. After a deploy, an open
+page reloads itself once the new version has installed, except while a transfer is on screen.
 
 ## Security and privacy
 

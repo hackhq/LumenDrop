@@ -74,7 +74,7 @@ func TestServiceWorker(t *testing.T) {
 	if got := res.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/javascript") {
 		t.Errorf("Content-Type = %q, want text/javascript", got)
 	}
-	for _, want := range []string{`"./"`, `"./send.html"`, `"./vendor/x.wasm"`} {
+	for _, want := range []string{`"./"`, `"./send.html"`, `"./vendor/x.wasm"`, `cache: "reload"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sw.js missing %s", want)
 		}
