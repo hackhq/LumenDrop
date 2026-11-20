@@ -562,3 +562,50 @@ body[data-state="error"] [data-show~="error"] {
   z-index: 1;
   background: rgb(0 0 0 / 0.72);
 }
+
+/* Speed picker in the send bar. */
+.speed {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.speed button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mist);
+  font: 600 0.9rem/1 var(--text);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.speed button:hover {
+  color: var(--ink);
+}
+
+.speed button[aria-pressed="true"] {
+  background: var(--yellow);
+  color: var(--night);
+}
+
+.speed__unit {
+  padding: 0 6px 0 3px;
+  color: var(--mist);
+  font-size: 0.8rem;
+}
+
+.stage__file {
+  flex: 1;
+}
+
+#stop {
+  flex: none;
+}

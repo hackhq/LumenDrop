@@ -4,6 +4,8 @@
 // load before cimbar_js.*.js, which picks up `window.Module` when it starts.
 (() => {
   const MODE_B = 68; // libcimbar's default mode; the receiver detects it automatically
+  const DEFAULT_FPS = 15;
+  const FPS_KEY = "lumen-send-fps";
   const TITLE = document.title;
 
   const canvas = UI.$("#canvas");
@@ -112,6 +114,27 @@
     choose.focus();
   }
 
+  // Slower speeds keep each frame up longer, which helps cameras that blend consecutive
+  // frames (slow shutter in dim rooms, slow LCDs). Changes apply immediately.
+  function setSpeed(fps) {
+    Send.setFPS(fps);
+    for (const b of document.querySelectorAll("[data-fps]")) {
+      b.setAttribute("aria-pressed", String(Number(b.dataset.fps) === fps));
+    }
+  }
+
+  function initialSpeed() {
+    const fromUrl = Number(new URLSearchParams(location.search).get("fps"));
+    if (fromUrl >= 1 && fromUrl <= 30) return fromUrl;
+    try {
+      const saved = Number(localStorage.getItem(FPS_KEY));
+      if (saved >= 1 && saved <= 30) return saved;
+    } catch {
+      // storage unavailable (private mode): use the default
+    }
+    return DEFAULT_FPS;
+  }
+
   window.Report = {
     setTitle() {},       // we set our own title in play()
     setHTML() {},        // upstream status text; our UI shows its own
@@ -129,10 +152,7 @@
       ready = true;
       Send.init_window(canvas);
       Send.setMode(MODE_B);
-      // ?fps=8 plays the code more slowly: each frame stays up longer, which helps
-      // cameras that blend consecutive frames (slow shutter, slow LCD).
-      const fps = Number(new URLSearchParams(location.search).get("fps"));
-      if (fps >= 1 && fps <= 30) Send.setFPS(fps);
+      setSpeed(initialSpeed());
       const encode = Module._cimbare_encode;
       Module._cimbare_encode = (ptr, len) => {
         const result = encode(ptr, len);
@@ -160,6 +180,17 @@
   choose.addEventListener("click", () => input.click());
   input.addEventListener("change", () => play(input.files[0]));
   UI.$("#stop").addEventListener("click", stop);
+  for (const b of document.querySelectorAll("[data-fps]")) {
+    b.addEventListener("click", () => {
+      const fps = Number(b.dataset.fps);
+      setSpeed(fps);
+      try {
+        localStorage.setItem(FPS_KEY, String(fps));
+      } catch {
+        // not remembered; still applies now
+      }
+    });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && document.body.dataset.state === "playing") stop();
   });

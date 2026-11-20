@@ -198,3 +198,47 @@ test("send.html?fps=8 plays the code at 8 frames per second", async () => {
   assert.ok(slow > 6 && slow < 9, `fps=8 gave ${slow.toFixed(1)} fps`);
   assert.ok(normal > 12, `default gave ${normal.toFixed(1)} fps`);
 });
+
+async function measureFps(page, seconds = 2) {
+  const start = await page.eval("__n");
+  await sleep(seconds * 1000);
+  return ((await page.eval("__n")) - start) / seconds;
+}
+
+const countFrames = `(() => { window.__n = 0; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__n++, f(...a)); return true; })()`;
+
+test("speed buttons change the frame rate while the code is playing, and are remembered", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await page.eval("localStorage.clear(), true");
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  await page.eval(countFrames);
+  await page.setFiles("#file", [small]);
+  await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
+  assert.equal(await page.eval("document.querySelector('[data-fps=\"15\"]').getAttribute('aria-pressed')"), "true");
+  await page.eval("document.querySelector('[data-fps=\"5\"]').click()");
+  assert.equal(await page.eval("document.querySelector('[data-fps=\"5\"]').getAttribute('aria-pressed')"), "true");
+  assert.equal(await page.eval("document.querySelector('[data-fps=\"15\"]').getAttribute('aria-pressed')"), "false");
+  const fps = await measureFps(page);
+  assert.ok(fps > 3.5 && fps < 6, `speed 5 gave ${fps.toFixed(1)} fps`);
+  await page.screenshot("send-speed-phone.png");
+
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  assert.equal(await page.eval("document.querySelector('[data-fps=\"5\"]').getAttribute('aria-pressed')"), "true", "choice remembered");
+  await page.eval("localStorage.clear(), true");
+  await page.close();
+});
+
+test("speed controls fit beside the file name on a phone", async () => {
+  const page = await openPage(browser, server.base + "send.html", { width: 390, height: 844, mobile: true });
+  await play(page, small);
+  const fits = await page.eval(`(() => {
+    const bar = document.querySelector('.stage__bar').getBoundingClientRect();
+    const canvas = document.querySelector('#canvas').getBoundingClientRect();
+    return document.documentElement.scrollWidth <= innerWidth && bar.bottom <= canvas.top && bar.right <= innerWidth;
+  })()`);
+  assert.equal(fits, true);
+  await page.screenshot("send-speed-phone.png");
+  await page.close();
+});

@@ -33,6 +33,13 @@
   <div class="stage" id="stage" hidden>
     <div class="stage__bar">
       <p class="stage__file"><span class="stage__name" id="name"></span> <span class="stage__size" id="size"></span></p>
+      <div class="speed" role="group" aria-label="Speed in frames per second" title="Slower helps cameras that can't keep up">
+        <button type="button" data-fps="5" aria-pressed="false">5</button>
+        <button type="button" data-fps="8" aria-pressed="false">8</button>
+        <button type="button" data-fps="12" aria-pressed="false">12</button>
+        <button type="button" data-fps="15" aria-pressed="true">15</button>
+        <span class="speed__unit" aria-hidden="true">fps</span>
+      </div>
       <button type="button" class="btn btn--ghost btn--small" id="stop">Stop</button>
     </div>
     <div class="stage__area" id="area">
