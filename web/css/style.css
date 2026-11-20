@@ -614,3 +614,27 @@ body[data-state="error"] [data-show~="error"] {
 #stop {
   flex: none;
 }
+
+.hud__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud__rate {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__rate:empty {
+  display: none;
+}
+
+.result__stats {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}

@@ -76,6 +76,13 @@
   }
   let lastId = null;      // id of the file libcimbar rebuilt last
 
+  // Speed estimate: bytes received = progress x the file's (compressed) size, measured over
+  // the last few seconds so it follows the camera as it improves or drifts.
+  const RATE_WINDOW_MS = 4000;
+  let fileSize = 0;
+  let firstDataAt = 0;
+  let rateSamples = [];
+
   // ---------- WASM heap helpers (views are re-made every time: the heap can grow) ----------
 
   function alloc(size) {
@@ -157,6 +164,10 @@
     }
     frames = 0;
     preferredLevel = null;
+    fileSize = 0;
+    firstDataAt = 0;
+    rateSamples = [];
+    UI.$("#rate").textContent = "";
     lastSeen = lastBytes = -1000;
     setProgress(0);
     setStatus("Point the camera at the code on the other screen.");
@@ -388,6 +399,29 @@
     }
   }
 
+  // The chunk header also carries the file's size (libcimbar FountainMetadata::file_size).
+  function chunkFileSize(buff) {
+    return buff[3] | (buff[2] << 8) | (buff[1] << 16) | ((buff[0] & 0x80) << 17);
+  }
+
+  function formatDuration(seconds) {
+    if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
+    return `${Math.round(seconds / 60)} min`;
+  }
+
+  function trackRate(progress) {
+    if (!fileSize) return;
+    const now = performance.now();
+    const bytes = progress * fileSize;
+    if (!firstDataAt) firstDataAt = now;
+    rateSamples.push([now, bytes]);
+    while (rateSamples.length > 2 && now - rateSamples[0][0] > RATE_WINDOW_MS) rateSamples.shift();
+    const [t0, b0] = rateSamples[0];
+    if (now - t0 < 800 || bytes <= b0) return; // too early to tell
+    const speed = ((bytes - b0) * 1000) / (now - t0);
+    UI.$("#rate").textContent = `${UI.formatBytes(speed)}/s, about ${formatDuration((fileSize - bytes) / speed)} left`;
+  }
+
   // Every fountain chunk starts with its file id (4 bytes, little-endian).
   function chunkFileId(buff) {
     return (buff[0] | (buff[1] << 8) | (buff[2] << 16) | (buff[3] << 24)) >>> 0;
@@ -410,13 +444,17 @@
       fountain = alloc(Module._cimbard_get_bufsize());
     }
     if (buff.length > fountain.size) return;
+    fileSize = chunkFileSize(buff);
     Module.HEAPU8.set(buff, fountain.ptr);
     const res = Module._cimbard_fountain_decode(fountain.ptr, buff.length);
 
     const report = readString(Module._cimbard_get_report);
     try {
       const parts = JSON.parse(report);
-      if (Array.isArray(parts) && parts.length) setProgress(Math.max(...parts));
+      if (Array.isArray(parts) && parts.length) {
+        setProgress(Math.max(...parts));
+        trackRate(progress);
+      }
     } catch {
       // not a progress report
     }
@@ -466,6 +504,8 @@
     save.download = name;
     UI.$("#recv-name").textContent = name;
     UI.$("#recv-size").textContent = UI.formatBytes(blob.size);
+    const seconds = Math.max(0.1, (performance.now() - (firstDataAt || performance.now())) / 1000);
+    UI.$("#recv-stats").textContent = `Received in ${seconds.toFixed(1)} s at ${UI.formatBytes(blob.size / seconds)}/s`;
 
     const share = UI.$("#share");
     const file = new File([blob], name, { type: "application/octet-stream" });

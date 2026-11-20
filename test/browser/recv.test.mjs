@@ -462,3 +462,41 @@ test("decodes through phone-camera glare (bright screen blooming over the code)"
     await browser.close();
   }
 });
+
+test("shows an estimated speed and time left while receiving, and a summary when done", async () => {
+  const payload4 = randomBytes(30 * 1024);
+  const src = join(FIX, "rate.bin");
+  writeFileSync(src, payload4);
+  const frames = await recordSender(src, 66, 24);
+  const browser = await launchBrowser();
+  try {
+    const page = await openPage(browser, server.base + "recv.html");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(async () => {
+      const shots = await Promise.all(${JSON.stringify(frames)}.map((b64) =>
+        createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
+      const c = document.createElement("canvas");
+      c.width = shots[0].width; c.height = shots[0].height;
+      const g = c.getContext("2d");
+      let i = 0;
+      const draw = () => g.drawImage(shots[i++ % shots.length], 0, 0);
+      draw();
+      setInterval(draw, 250); // a slow camera, so the transfer lasts a few seconds
+      navigator.mediaDevices.getUserMedia = async () => c.captureStream(30);
+      window.__rates = [];
+      const rate = document.querySelector('#rate');
+      new MutationObserver(() => __rates.push(rate.textContent)).observe(rate, { childList: true, characterData: true, subtree: true });
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("document.body.dataset.state === 'done'", 90000);
+    const rates = await page.eval("__rates");
+    assert.ok(rates.some((t) => /^[\d.]+ (B|KB|MB)\/s, about \d+ s left$/.test(t)), `no live estimate seen: ${JSON.stringify(rates.slice(-5))}`);
+    assert.match(await page.eval("document.querySelector('#recv-stats').textContent"), /^Received in [\d.]+ s at [\d.]+ (B|KB|MB)\/s$/);
+    const { bytes } = await downloadVia(page, browser.cdp);
+    assert.equal(sha256(bytes), sha256(payload4));
+    assert.deepEqual(page.log.errors, []);
+  } finally {
+    await browser.close();
+  }
+});

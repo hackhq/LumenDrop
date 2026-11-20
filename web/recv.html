@@ -27,6 +27,7 @@
     <section class="panel result" id="result" data-show="done">
       <h2 class="result__title">File received</h2>
       <p class="result__file"><span class="result__name" id="recv-name"></span> <span class="result__size" id="recv-size"></span></p>
+      <p class="result__stats" id="recv-stats"></p>
       <div class="actions">
         <a class="btn btn--primary" id="save" href="#" download>Save file</a>
         <button type="button" class="btn btn--ghost" id="share" hidden>Share</button>
@@ -53,7 +54,10 @@
         <svg viewBox="0 0 64 64"><circle class="ring__track" cx="32" cy="32" r="26"/><circle class="ring__fill" id="ring" cx="32" cy="32" r="26"/></svg>
         <span class="ring__pct" id="pct">0%</span>
       </div>
-      <p class="hud__status" id="status" aria-live="polite"></p>
+      <div class="hud__text">
+        <p class="hud__status" id="status" aria-live="polite"></p>
+        <p class="hud__rate" id="rate"></p>
+      </div>
       <button type="button" class="btn btn--ghost btn--small" id="cancel">Stop</button>
     </div>
   </div>
