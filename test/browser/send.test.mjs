@@ -179,3 +179,22 @@ test("after Stop the page no longer keeps the screen awake", async () => {
   assert.equal(await page.eval("__wake"), before, "wake lock requested again after Stop");
   await page.close();
 });
+
+test("send.html?fps=8 plays the code at 8 frames per second", async () => {
+  const rate = async (url) => {
+    const page = await openPage(browser, url);
+    await page.waitFor(ready, 20000);
+    await page.eval(`(() => { window.__n = 0; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__n++, f(...a)); return true; })()`);
+    await page.setFiles("#file", [small]);
+    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
+    const start = await page.eval("__n");
+    await sleep(3000);
+    const n = (await page.eval("__n")) - start;
+    await page.close();
+    return n / 3;
+  };
+  const slow = await rate(server.base + "send.html?fps=8");
+  const normal = await rate(server.base + "send.html");
+  assert.ok(slow > 6 && slow < 9, `fps=8 gave ${slow.toFixed(1)} fps`);
+  assert.ok(normal > 12, `default gave ${normal.toFixed(1)} fps`);
+});

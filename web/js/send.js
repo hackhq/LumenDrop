@@ -129,6 +129,10 @@
       ready = true;
       Send.init_window(canvas);
       Send.setMode(MODE_B);
+      // ?fps=8 plays the code more slowly: each frame stays up longer, which helps
+      // cameras that blend consecutive frames (slow shutter, slow LCD).
+      const fps = Number(new URLSearchParams(location.search).get("fps"));
+      if (fps >= 1 && fps <= 30) Send.setFPS(fps);
       const encode = Module._cimbare_encode;
       Module._cimbare_encode = (ptr, len) => {
         const result = encode(ptr, len);

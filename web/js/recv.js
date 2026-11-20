@@ -38,6 +38,10 @@
   // Open recv.html#debug to see what the camera delivers and what the decoder says.
   const DEBUG = location.hash.startsWith("#debug");
   const HIRES = location.hash === "#debug-4k"; // ask the camera for 4K instead of 1080p
+  // ?camfps=30 asks for more camera frames per second, which also caps the shutter time
+  // (iOS can expose for up to 1/fps), so fewer frames blend two codes together.
+  const requestedFps = Number(new URLSearchParams(location.search).get("camfps"));
+  const CAMERA_FPS = requestedFps >= 1 && requestedFps <= 60 ? requestedFps : 15;
   const stats = { frame: "", luma: "", posted: 0, bytes: 0, found: 0, missed: 0, errors: 0, last: "" };
 
   // Brightness of a sample of the pixels handed to the decoder: an all-black or flat frame
@@ -154,7 +158,7 @@
           facingMode: "environment",
           width: { ideal: HIRES ? 3840 : 1920 },
           height: { ideal: HIRES ? 2160 : 1080 },
-          frameRate: { ideal: 15 },
+          frameRate: { ideal: CAMERA_FPS },
         },
       });
       if (mine !== session) {

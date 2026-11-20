@@ -291,3 +291,21 @@ test("#debug-4k asks the camera for 3840x2160", async () => {
     await browser.close();
   }
 });
+
+test("recv.html?camfps=30 asks the camera for 30 fps", async () => {
+  const browser = await launchBrowser(["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]);
+  try {
+    const page = await openPage(browser, server.base + "recv.html?camfps=30");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(() => {
+      const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (c) => { window.__asked = c; return gum(c); };
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("!!window.__asked");
+    assert.equal(await page.eval("__asked.video.frameRate.ideal"), 30);
+  } finally {
+    await browser.close();
+  }
+});
