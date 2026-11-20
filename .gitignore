@@ -1,0 +1,9 @@
+# build output
+/lumendrop
+/lumendrop-*
+/dist/
+
+# local scratch / tooling
+/.superpowers/
+/test-output/
+*.log
