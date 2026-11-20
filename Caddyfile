@@ -1,0 +1,6 @@
+# Example: Caddy terminates HTTPS (required for camera access on phones)
+# and forwards to the lumendrop binary listening on loopback.
+drop.example.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+}

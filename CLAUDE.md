@@ -2,34 +2,40 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project status
+## Project
 
-Lumen Drop is a web app (installable PWA) for moving files between devices via screen → camera only, using [libcimbar](https://github.com/sz3/libcimbar) color barcodes. **Nothing is implemented yet.** `PLAN.md` is the source of truth for scope, the planned file layout, and milestones M1–M5 — read it first. Items under "Ideas for later" (multi-stream big files, passphrase encryption, SHA-256 display) are out of scope unless explicitly requested.
-
-The plan's tree is rooted at `lumen-drop/`; whether files live at this repo's root or in a subfolder is not yet decided.
+Lumen Drop moves a file between devices via screen → camera only, using [libcimbar](https://github.com/sz3/libcimbar) color barcodes. Two modes: Send (`web/send.html`) and Receive (`web/recv.html`). A Go binary embeds the static site; Caddy terminates HTTPS in deployment. `PLAN.md` holds scope and milestones; `docs/superpowers/specs/` holds the approved design.
 
 ## Commands
 
-No build, lint, or test tooling exists yet. Update this section when any is added.
+```sh
+go run .                                          # serve on 127.0.0.1:8080 (camera works on localhost)
+go test ./...                                     # Go: headers, MIME, generated service worker
+node --test --test-concurrency=1 test/browser/    # all browser tests (headless chromium on PATH, Node 22+)
+node --test --test-concurrency=1 --test-name-pattern="Stop returns" test/browser/send.test.mjs   # one test
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .                                    # deploy binary
+```
 
-- **WASM artifacts:** download from [libcimbar releases](https://github.com/sz3/libcimbar/releases/latest) or build with Docker per libcimbar's `WASM.md`; they go in `vendor/cimbar/`.
-- **Local testing:** `localhost` is exempt from the HTTPS requirement for camera access, so the receive page can be tested on a local desktop webcam.
-- **Testing is manual and cross-device:** computer → iPhone, then iPhone → computer, starting at 1 MB and stepping up to ~33 MB. iPhone Safari decoding may be slow — test it early rather than last.
+Browser tests build the binary, start it on a fixed port per file, and drive Chromium over the DevTools Protocol (`test/browser/harness.mjs`, no npm deps). Screenshots and fixtures go to `test-output/` (gitignored). `recv.test.mjs` records the send page into `test-output/sender.mjpeg` and feeds it to the receive page as a fake camera, then checks the downloaded file's SHA-256.
 
-## Architecture (planned)
+## Architecture
 
-Static files only — no backend. Plain HTML/CSS/JS pages (`index.html`, `send.html`, `recv.html`) with per-page scripts in `js/`. The planned `nginx.conf` is only for static HTTPS hosting.
+- **Server** (`main.go`, `server.go`, `sw.go`): `//go:embed web` → `http.FileServerFS`, wrapped with CSP/nosniff/no-referrer headers. `sw.js` is not a file: it is generated at startup with a cache name hashed from all embedded files and a precache list of every file (`index.html` → `./`, because the file server redirects `/index.html`). Any change under `web/` therefore updates clients automatically.
+- **Vendored libcimbar** (`web/vendor/cimbar/`): v0.6.9 release files, byte-identical (checked by `SHA256SUMS`). One WASM serves both encoder (`_cimbare_*`) and decoder (`_cimbard_*`). The timestamp stamp `2026-11-18T0531` appears in `send.html`, `recv.html` and `js/recv.js`; the upstream worker `importScripts` the stamped name, so never rename the files. Upgrade steps are in that folder's README.
+- **Send** (`js/send.js`): defines `window.Report` (callbacks the vendored `Send` driver calls) and `window.Module` (must exist before the `cimbar_js` script tag runs). Mode B (68) is fixed; `fit()` sizes the canvas to the code's aspect ratio inside the stage.
+- **Receive** (`js/recv.js`): camera frames (`VideoFrame` NV12/I420, else `createImageBitmap`) are round-robined to 3–6 upstream `recv-worker`s; the main-thread `Module` locks the mode on the first successful frame, runs the fountain decoder, then streams `_cimbard_decompress_read` into a Blob offered via Save/Share.
+- **Shared** (`js/ui.js`): global `UI` (state via `body[data-state]`, wake lock, fullscreen overlay, SW registration). Pages show/hide sections with CSS keyed on `body[data-state]`.
 
-**Send pipeline** (`send.js` + `ui.js`): read file → libcimbar encoder (WASM) → draw frames to a `<canvas>` in a `requestAnimationFrame` loop, fullscreen, with `navigator.wakeLock` holding the screen on.
+## libcimbar quirks (v0.6.9)
 
-**Receive pipeline** (`recv.js` → `recv-worker.js`): `getUserMedia({video:{facingMode:"environment"}})` → `OffscreenCanvas` → `postMessage` frames to a Web Worker that runs the WASM decoder → progress reported back to the page → on completion build a `Blob` and trigger download. Decoding must stay in the worker so the UI and camera preview stay responsive.
-
-**libcimbar integration:** the `.js` + `.wasm` build goes in `vendor/cimbar/`. Learn the exported API from libcimbar's own `web/send.js`, `web/recv.js`, and `web/recv-worker.js` (the reference implementation) — do not guess function names or signatures.
+- The fountain sink has no reset API and ignores finished file ids; it is rebuilt only when `_cimbard_configure_decode` gets a different mode. `start()` in `recv.js` relies on this for "Receive another".
+- The decoder keeps only the last rebuilt file id; rebuilding the same id again yields 0 bytes. `finish()` reloads the page with `#scan` (auto-start) in that case.
+- `Send` has no stop API; its render loop keeps running after Stop.
 
 ## Constraints
 
-- **Offline after first visit:** everything the app ships, including the `.wasm`, must be cached by the service worker (`sw.js`), alongside a `manifest.json` for install.
-- **HTTPS is mandatory in deployment** — iPhone will not grant camera access otherwise.
-- **`.wasm` must be served as `application/wasm`** (in Nginx: `types { application/wasm wasm; }`).
-- **Throughput limits:** files up to ~33 MB after zstd compression, at roughly 100 KB/s.
-- **Licensing:** libcimbar is MPL-2.0 — any modified libcimbar files must remain open source. Keep app code separate from vendored libcimbar code so the boundary stays clear.
+- No inline scripts, styles, or `on*=` handlers (CSP `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'`); setting styles via CSSOM (`el.style.setProperty`) is fine.
+- No third-party URLs in `web/` (offline + privacy). Fonts are self-hosted.
+- Any string from a file or the barcode reaches the DOM via `textContent`. Received files are offered only as `application/octet-stream` downloads/shares, never opened in-app.
+- Never style the barcode `<canvas>` (radius, filters, opacity, overlays) — cameras must read it as drawn.
+- Licensing: our code is MIT; `web/vendor/cimbar/` stays MPL-2.0 and unmodified; do not copy code from upstream `web/*.js` into our files (it would make them MPL).

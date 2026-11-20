@@ -103,7 +103,7 @@ export async function openPage(browser, url, { width = 1280, height = 800, mobil
       log.console.push(`${p.type}: ${text}`);
       if (p.type === "error") log.errors.push(text);
     } else if (msg.method === "Log.entryAdded" && p.entry.level === "error") {
-      log.errors.push(`${p.entry.source}: ${p.entry.text}`);
+      log.errors.push(`${p.entry.source}: ${p.entry.text}${p.entry.url ? " " + p.entry.url : ""}`);
     } else if (msg.method === "Network.requestWillBeSent") {
       log.requests.push(p.request.url);
     }
