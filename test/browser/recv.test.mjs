@@ -310,8 +310,8 @@ test("recv.html?camfps=30 asks the camera for 30 fps", async () => {
   }
 });
 
-test("receiver follows the sender when it switches symbol size mid-transfer", async () => {
-  // Record a 60 KB file as Small (B) frames, too few to finish it, then as Large (Bu) frames.
+test("receiver follows the sender when it switches resolution mid-transfer", async () => {
+  // Record a 60 KB file as High (B) frames, too few to finish it, then as Low (Bu) frames.
   const payload2 = randomBytes(60 * 1024);
   const src = join(FIX, "switch.bin");
   writeFileSync(src, payload2);
@@ -354,7 +354,7 @@ test("receiver follows the sender when it switches symbol size mid-transfer", as
     })()`);
     await page.eval("document.querySelector('#start').click()");
     await page.waitFor("/mode 68/.test(document.querySelector('#debug').textContent) && document.querySelector('#pct').textContent !== '0%'", 30000);
-    await page.eval("(window.__clip = 'large', true)"); // the sender switched to Large
+    await page.eval("(window.__clip = 'large', true)"); // the sender switched to Low
     await page.waitFor("document.body.dataset.state === 'done'", 60000);
     assert.match(await page.eval("document.querySelector('#debug').textContent"), /mode 66/);
     assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), "switch.bin");

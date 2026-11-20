@@ -33,11 +33,10 @@
   <div class="stage" id="stage" hidden>
     <div class="stage__bar">
       <p class="stage__file"><span class="stage__name" id="name"></span> <span class="stage__size" id="size"></span></p>
-      <div class="picker" role="group" aria-label="Symbol size" title="Larger symbols are easier for weaker cameras but carry less per frame">
-        <span class="picker__label" aria-hidden="true">Size</span>
-        <button type="button" data-mode="68" aria-pressed="true">S</button>
-        <button type="button" data-mode="67" aria-pressed="false">M</button>
-        <button type="button" data-mode="66" aria-pressed="false">L</button>
+      <div class="picker" role="group" aria-label="Resolution" title="Lower resolution is easier for weaker cameras but needs more frames">
+        <button type="button" data-mode="66" aria-pressed="false">Low</button>
+        <button type="button" data-mode="67" aria-pressed="false">Medium</button>
+        <button type="button" data-mode="68" aria-pressed="true">High</button>
       </div>
       <div class="picker" role="group" aria-label="Speed in frames per second" title="Slower helps cameras that can't keep up">
         <button type="button" data-fps="5" aria-pressed="false">5</button>

@@ -246,19 +246,22 @@ test("speed controls fit beside the file name on a phone", async () => {
   await page.close();
 });
 
-test("size buttons switch the symbol size while playing, and are remembered", async () => {
+test("resolution buttons (Low/Medium/High) switch the code while playing, and are remembered", async () => {
   const page = await openPage(browser, server.base + "send.html");
   await page.eval("localStorage.clear(), true");
   await page.goto(server.base + "send.html");
   await play(page, small);
+  assert.deepEqual(await page.eval("[...document.querySelectorAll('[data-mode]')].map((b) => [b.textContent, b.dataset.mode])"),
+    [["Low", "66"], ["Medium", "67"], ["High", "68"]]);
+  assert.equal(await page.eval("document.querySelector('[data-mode]').closest('[role=group]').getAttribute('aria-label')"), "Resolution");
   assert.equal(await page.eval("document.querySelector('[data-mode=\"68\"]').getAttribute('aria-pressed')"), "true");
   const ratio = () => page.eval("(() => { const r = document.querySelector('#canvas').getBoundingClientRect(); return r.width / r.height; })()");
-  assert.ok(Math.abs((await ratio()) - 1) < 0.02, "Small (mode B) is square");
+  assert.ok(Math.abs((await ratio()) - 1) < 0.02, "High (mode B) is square");
   await page.eval("document.querySelector('[data-mode=\"66\"]').click()");
   await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing')");
   await sleep(500);
   assert.equal(await page.eval("document.querySelector('[data-mode=\"66\"]').getAttribute('aria-pressed')"), "true");
-  assert.ok(Math.abs((await ratio()) - 752 / 653) < 0.02, `Large (mode Bu) is ${752 / 653}:1, got ${await ratio()}`);
+  assert.ok(Math.abs((await ratio()) - 752 / 653) < 0.02, `Low (mode Bu) is ${752 / 653}:1, got ${await ratio()}`);
   const shot = decodePNG(await page.capture());
   assert.ok(colorfulFraction(shot, await canvasRect(page)) > 0.05, "still drawing a code");
   await page.screenshot("send-size-large.png");
