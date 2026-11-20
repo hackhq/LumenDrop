@@ -27,6 +27,8 @@
   let frames = 0;
   let lastSeen = -1000;   // frame number when a code was last found
   let lastBytes = -1000;  // frame number when a code last yielded data
+  let lastBytesAt = 0;    // time of the last data; a locked mode with none for a while is released
+  const RELOCK_MS = 3000;
   let progress = 0;
   let mode = 0;
   let fountain = null;    // {ptr, size} in the WASM heap
@@ -194,6 +196,9 @@
   async function onFrame() {
     if (!running) return;
     frames++;
+    // The sender may have switched symbol size: if the locked mode has gone quiet, detect
+    // again. The same mode re-locks without losing progress (libcimbar keeps its sink).
+    if (mode && performance.now() - lastBytesAt > RELOCK_MS) mode = 0;
     try {
       if (workersReady === workers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
         const msg = await grab(mode || MODES[frames % MODES.length]);
@@ -318,6 +323,7 @@
         return;
       }
       lastSeen = lastBytes = frames;
+      lastBytesAt = performance.now();
       feed(data.buff, data.mode);
     } else if (data.nodata) {
       lastSeen = frames;
@@ -342,6 +348,7 @@
       // First successful frame: lock the mode and size the fountain buffer for it.
       mode = frameMode;
       Module._cimbard_configure_decode(mode);
+      if (fountain) Module._free(fountain.ptr);
       fountain = alloc(Module._cimbard_get_bufsize());
     }
     if (buff.length > fountain.size) return;

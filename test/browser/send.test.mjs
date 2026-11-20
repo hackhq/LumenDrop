@@ -180,47 +180,50 @@ test("after Stop the page no longer keeps the screen awake", async () => {
   await page.close();
 });
 
-test("send.html?fps=8 plays the code at 8 frames per second", async () => {
-  const rate = async (url) => {
-    const page = await openPage(browser, url);
-    await page.waitFor(ready, 20000);
-    await page.eval(`(() => { window.__n = 0; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__n++, f(...a)); return true; })()`);
-    await page.setFiles("#file", [small]);
-    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
-    const start = await page.eval("__n");
-    await sleep(3000);
-    const n = (await page.eval("__n")) - start;
-    await page.close();
-    return n / 3;
-  };
-  const slow = await rate(server.base + "send.html?fps=8");
-  const normal = await rate(server.base + "send.html");
-  assert.ok(slow > 6 && slow < 9, `fps=8 gave ${slow.toFixed(1)} fps`);
-  assert.ok(normal > 12, `default gave ${normal.toFixed(1)} fps`);
-});
+// libcimbar never draws the next frame before the configured interval has passed, so the
+// shortest gap between frames shows the speed setting even when a busy machine renders slowly.
+const recordFrameTimes = `(() => { window.__t = []; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__t.push(performance.now()), f(...a)); return true; })()`;
 
-async function measureFps(page, seconds = 2) {
-  const start = await page.eval("__n");
+async function shortestGap(page, seconds = 3) {
+  await page.eval("(window.__t = [], true)");
   await sleep(seconds * 1000);
-  return ((await page.eval("__n")) - start) / seconds;
+  const t = await page.eval("__t");
+  assert.ok(t.length >= 3, `code is not playing (${t.length} frames)`);
+  return Math.min(...t.slice(1).map((v, i) => v - t[i]));
 }
 
-const countFrames = `(() => { window.__n = 0; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__n++, f(...a)); return true; })()`;
+test("send.html?fps=8 plays the code at 8 frames per second", async () => {
+  const gap = async (url) => {
+    const page = await openPage(browser, url);
+    await page.waitFor(ready, 20000);
+    await page.eval(recordFrameTimes);
+    await page.setFiles("#file", [small]);
+    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
+    const g = await shortestGap(page);
+    await page.close();
+    return g;
+  };
+  const slow = await gap(server.base + "send.html?fps=8");
+  assert.ok(slow >= 120, `fps=8 drew frames ${slow.toFixed(0)} ms apart (want >= 125)`);
+  const normal = await gap(server.base + "send.html");
+  assert.ok(normal < 110, `default drew frames no closer than ${normal.toFixed(0)} ms (want ~66)`);
+});
+
 
 test("speed buttons change the frame rate while the code is playing, and are remembered", async () => {
   const page = await openPage(browser, server.base + "send.html");
   await page.eval("localStorage.clear(), true");
   await page.goto(server.base + "send.html");
   await page.waitFor(ready, 20000);
-  await page.eval(countFrames);
+  await page.eval(recordFrameTimes);
   await page.setFiles("#file", [small]);
   await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
   assert.equal(await page.eval("document.querySelector('[data-fps=\"15\"]').getAttribute('aria-pressed')"), "true");
   await page.eval("document.querySelector('[data-fps=\"5\"]').click()");
   assert.equal(await page.eval("document.querySelector('[data-fps=\"5\"]').getAttribute('aria-pressed')"), "true");
   assert.equal(await page.eval("document.querySelector('[data-fps=\"15\"]').getAttribute('aria-pressed')"), "false");
-  const fps = await measureFps(page);
-  assert.ok(fps > 3.5 && fps < 6, `speed 5 gave ${fps.toFixed(1)} fps`);
+  const gap = await shortestGap(page);
+  assert.ok(gap >= 190, `speed 5 drew frames ${gap.toFixed(0)} ms apart (want >= 200)`);
   await page.screenshot("send-speed-phone.png");
 
   await page.goto(server.base + "send.html");
@@ -240,5 +243,29 @@ test("speed controls fit beside the file name on a phone", async () => {
   })()`);
   assert.equal(fits, true);
   await page.screenshot("send-speed-phone.png");
+  await page.close();
+});
+
+test("size buttons switch the symbol size while playing, and are remembered", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await page.eval("localStorage.clear(), true");
+  await page.goto(server.base + "send.html");
+  await play(page, small);
+  assert.equal(await page.eval("document.querySelector('[data-mode=\"68\"]').getAttribute('aria-pressed')"), "true");
+  const ratio = () => page.eval("(() => { const r = document.querySelector('#canvas').getBoundingClientRect(); return r.width / r.height; })()");
+  assert.ok(Math.abs((await ratio()) - 1) < 0.02, "Small (mode B) is square");
+  await page.eval("document.querySelector('[data-mode=\"66\"]').click()");
+  await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing')");
+  await sleep(500);
+  assert.equal(await page.eval("document.querySelector('[data-mode=\"66\"]').getAttribute('aria-pressed')"), "true");
+  assert.ok(Math.abs((await ratio()) - 752 / 653) < 0.02, `Large (mode Bu) is ${752 / 653}:1, got ${await ratio()}`);
+  const shot = decodePNG(await page.capture());
+  assert.ok(colorfulFraction(shot, await canvasRect(page)) > 0.05, "still drawing a code");
+  await page.screenshot("send-size-large.png");
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  assert.equal(await page.eval("document.querySelector('[data-mode=\"66\"]').getAttribute('aria-pressed')"), "true", "choice remembered");
+  await page.eval("localStorage.clear(), true");
+  assert.deepEqual(page.log.errors, []);
   await page.close();
 });

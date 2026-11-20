@@ -309,3 +309,58 @@ test("recv.html?camfps=30 asks the camera for 30 fps", async () => {
     await browser.close();
   }
 });
+
+test("receiver follows the sender when it switches symbol size mid-transfer", async () => {
+  // Record a 60 KB file as Small (B) frames, too few to finish it, then as Large (Bu) frames.
+  const payload2 = randomBytes(60 * 1024);
+  const src = join(FIX, "switch.bin");
+  writeFileSync(src, payload2);
+  const small = [];
+  const large = [];
+  const sender = await launchBrowser();
+  try {
+    const page = await openPage(sender, server.base + "send.html", { width: 1280, height: 900 });
+    await page.eval("localStorage.clear(), true");
+    await page.goto(server.base + "send.html?fps=5");
+    await page.waitFor("!document.querySelector('#choose').disabled", 20000);
+    await page.setFiles("#file", [src]);
+    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
+    for (let i = 0; i < 6; i++) { await sleep(200); small.push((await page.capture("jpeg", 85)).toString("base64")); }
+    await page.eval("document.querySelector('[data-mode=\"66\"]').click()");
+    await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing')");
+    for (let i = 0; i < 40; i++) { await sleep(200); large.push((await page.capture("jpeg", 85)).toString("base64")); }
+  } finally {
+    await sender.close();
+  }
+
+  // Play them to the receive page through a canvas "camera" we control.
+  const browser = await launchBrowser();
+  try {
+    const page = await openPage(browser, server.base + "recv.html#debug");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(async () => {
+      const load = (list) => Promise.all(list.map((b64) =>
+        createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
+      window.__clips = { small: await load(${JSON.stringify(small)}), large: await load(${JSON.stringify(large)}) };
+      window.__clip = "small";
+      const c = document.createElement("canvas");
+      c.width = 1280; c.height = 900;
+      const g = c.getContext("2d");
+      let i = 0;
+      setInterval(() => { const f = __clips[__clip]; g.drawImage(f[i++ % f.length], 0, 0); }, 66);
+      const stream = c.captureStream(30);
+      navigator.mediaDevices.getUserMedia = async () => stream;
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("/mode 68/.test(document.querySelector('#debug').textContent) && document.querySelector('#pct').textContent !== '0%'", 30000);
+    await page.eval("(window.__clip = 'large', true)"); // the sender switched to Large
+    await page.waitFor("document.body.dataset.state === 'done'", 60000);
+    assert.match(await page.eval("document.querySelector('#debug').textContent"), /mode 66/);
+    assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), "switch.bin");
+    const { bytes } = await downloadVia(page, browser.cdp);
+    assert.equal(sha256(bytes), sha256(payload2));
+  } finally {
+    await browser.close();
+  }
+});

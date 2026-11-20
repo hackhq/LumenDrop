@@ -3,7 +3,11 @@
 // global `Send` and calls back into the global `Report` defined below. This script must
 // load before cimbar_js.*.js, which picks up `window.Module` when it starts.
 (() => {
-  const MODE_B = 68; // libcimbar's default mode; the receiver detects it automatically
+  // libcimbar modes by symbol size on screen: S = B (68, default), M = Bm (67), L = Bu (66).
+  // Larger symbols suit weaker cameras but carry less per frame. The receiver detects the mode.
+  const MODES = [68, 67, 66];
+  const DEFAULT_MODE = 68;
+  const MODE_KEY = "lumen-send-mode";
   const DEFAULT_FPS = 15;
   const FPS_KEY = "lumen-send-fps";
   const TITLE = document.title;
@@ -21,6 +25,7 @@
   let importing = false; // libcimbar is still reading/compressing a file
   let outcome = null;    // first decisive encode result of the current import: 0 = ready, < 0 = failed
   let pending = null;    // a file picked meanwhile; starts when the current import ends
+  let currentFile = null; // the file on screen, re-encoded when the symbol size changes
 
   function showError(message) {
     stage.hidden = true;
@@ -55,6 +60,7 @@
 
   function play(file) {
     if (!ready || !file || document.body.dataset.state === "error") return;
+    currentFile = file;
     errorBox.hidden = true;
     UI.$("#name").textContent = file.name;
     UI.$("#size").textContent = UI.formatBytes(file.size);
@@ -105,6 +111,7 @@
   }
 
   function stop() {
+    currentFile = null;
     stage.hidden = true;
     UI.setState("pick");
     UI.exitFullscreen();
@@ -121,6 +128,23 @@
     for (const b of document.querySelectorAll("[data-fps]")) {
       b.setAttribute("aria-pressed", String(Number(b.dataset.fps) === fps));
     }
+  }
+
+  function setSymbolMode(mode) {
+    Send.setMode(mode); // reports the new aspect ratio, which re-fits the canvas
+    for (const b of document.querySelectorAll("[data-mode]")) {
+      b.setAttribute("aria-pressed", String(Number(b.dataset.mode) === mode));
+    }
+  }
+
+  function initialMode() {
+    try {
+      const saved = Number(localStorage.getItem(MODE_KEY));
+      if (MODES.includes(saved)) return saved;
+    } catch {
+      // storage unavailable: use the default
+    }
+    return DEFAULT_MODE;
   }
 
   function initialSpeed() {
@@ -151,7 +175,7 @@
     onRuntimeInitialized() {
       ready = true;
       Send.init_window(canvas);
-      Send.setMode(MODE_B);
+      setSymbolMode(initialMode());
       setSpeed(initialSpeed());
       const encode = Module._cimbare_encode;
       Module._cimbare_encode = (ptr, len) => {
@@ -180,6 +204,19 @@
   choose.addEventListener("click", () => input.click());
   input.addEventListener("change", () => play(input.files[0]));
   UI.$("#stop").addEventListener("click", stop);
+  for (const b of document.querySelectorAll("[data-mode]")) {
+    b.addEventListener("click", () => {
+      const mode = Number(b.dataset.mode);
+      setSymbolMode(mode);
+      try {
+        localStorage.setItem(MODE_KEY, String(mode));
+      } catch {
+        // not remembered; still applies now
+      }
+      // Re-encode for the new layout (libcimbar drops streams that don't fit a new mode).
+      if (currentFile && document.body.dataset.state === "playing") play(currentFile);
+    });
+  }
   for (const b of document.querySelectorAll("[data-fps]")) {
     b.addEventListener("click", () => {
       const fps = Number(b.dataset.fps);

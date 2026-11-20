@@ -563,8 +563,8 @@ body[data-state="error"] [data-show~="error"] {
   background: rgb(0 0 0 / 0.72);
 }
 
-/* Speed picker in the send bar. */
-.speed {
+/* Size and speed pickers in the send bar. */
+.picker {
   flex: none;
   display: flex;
   align-items: center;
@@ -574,7 +574,7 @@ body[data-state="error"] [data-show~="error"] {
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.speed button {
+.picker button {
   min-width: 32px;
   height: 32px;
   padding: 0 6px;
@@ -587,23 +587,28 @@ body[data-state="error"] [data-show~="error"] {
   cursor: pointer;
 }
 
-.speed button:hover {
+.picker button:hover {
   color: var(--ink);
 }
 
-.speed button[aria-pressed="true"] {
+.picker button[aria-pressed="true"] {
   background: var(--yellow);
   color: var(--night);
 }
 
-.speed__unit {
-  padding: 0 6px 0 3px;
+.picker__label {
+  padding: 0 5px;
   color: var(--mist);
   font-size: 0.8rem;
 }
 
 .stage__file {
-  flex: 1;
+  flex: 1 1 140px;
+}
+
+.stage__bar {
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 #stop {
