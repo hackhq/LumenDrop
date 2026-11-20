@@ -3,6 +3,7 @@
 import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 
 export const ROOT = new URL("../../", import.meta.url).pathname;
 export const OUT = join(ROOT, "test-output");
@@ -136,6 +137,10 @@ export async function openPage(browser, url, { width = 1280, height = 800, mobil
       await s("Page.navigate", { url: target });
       await page.waitFor("document.readyState === 'complete'");
     },
+    async capture(format = "png", quality) {
+      const { data } = await s("Page.captureScreenshot", { format, quality });
+      return Buffer.from(data, "base64");
+    },
     async screenshot(name) {
       const { data } = await s("Page.captureScreenshot", { format: "png" });
       writeFileSync(join(OUT, name), Buffer.from(data, "base64"));
@@ -155,4 +160,61 @@ export async function openPage(browser, url, { width = 1280, height = 800, mobil
 // Requests to anything other than our own server (or blob:/data:) break offline use and privacy.
 export function foreignRequests(log, base) {
   return log.requests.filter((u) => !u.startsWith(base) && !u.startsWith("blob:") && !u.startsWith("data:"));
+}
+
+// Decodes the 8-bit RGB/RGBA non-interlaced PNGs that Chromium screenshots produce.
+export function decodePNG(buf) {
+  let pos = 8, width, height, bpp;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString("ascii", pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      if (data[8] !== 8 || data[12] !== 0 || (data[9] !== 2 && data[9] !== 6)) throw new Error("unsupported PNG");
+      bpp = data[9] === 6 ? 4 : 3;
+    } else if (type === "IDAT") idat.push(data);
+    else if (type === "IEND") break;
+    pos += 12 + len;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const px = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    const row = y * (stride + 1) + 1;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? px[y * stride + x - bpp] : 0;
+      const b = y > 0 ? px[(y - 1) * stride + x] : 0;
+      const c = x >= bpp && y > 0 ? px[(y - 1) * stride + x - bpp] : 0;
+      let v = raw[row + x];
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      px[y * stride + x] = v & 255;
+    }
+  }
+  return { width, height, bpp, px };
+}
+
+// Fraction of strongly colored (saturated) pixels inside rect {x, y, w, h}.
+export function colorfulFraction(img, rect) {
+  let hits = 0, total = 0;
+  const x0 = Math.max(0, Math.floor(rect.x)), y0 = Math.max(0, Math.floor(rect.y));
+  const x1 = Math.min(img.width, Math.floor(rect.x + rect.w)), y1 = Math.min(img.height, Math.floor(rect.y + rect.h));
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      const i = (y * img.width + x) * img.bpp;
+      const r = img.px[i], g = img.px[i + 1], b = img.px[i + 2];
+      if (Math.max(r, g, b) - Math.min(r, g, b) > 80) hits++;
+      total++;
+    }
+  }
+  return total ? hits / total : 0;
 }

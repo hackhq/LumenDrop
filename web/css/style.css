@@ -353,3 +353,54 @@ a {
   flex-direction: column;
   background: #000;
 }
+
+/* ---------- Send ---------- */
+
+.drop.is-over {
+  border-color: var(--yellow);
+  box-shadow: inset 0 0 0 1px var(--yellow);
+}
+
+.btn--small {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.95rem;
+}
+
+.stage__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+}
+
+.stage__file {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.95rem;
+}
+
+.stage__size {
+  color: var(--mist);
+}
+
+/* The code itself is never styled: no radius, filters or overlays, or cameras misread it. */
+.stage__area {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 8px max(8px, env(safe-area-inset-bottom));
+}
+
+#canvas {
+  display: block;
+}
+
+body[data-state="error"] .drop {
+  display: none;
+}

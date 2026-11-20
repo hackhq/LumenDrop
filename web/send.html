@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Send a file - Lumen Drop</title>
+  <meta name="theme-color" content="#19163a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-state="loading">
+  <main class="page page--send">
+    <a class="back" href="./">Lumen Drop</a>
+
+    <header>
+      <h1 class="title">Send a file</h1>
+      <p class="lede">Pick a file and this screen plays it as moving color codes. Point the other device's camera at it.</p>
+    </header>
+
+    <section class="panel drop" id="drop">
+      <input type="file" id="file" class="visually-hidden" tabindex="-1">
+      <button type="button" class="btn btn--primary" id="choose" disabled>Loading encoder…</button>
+      <p class="note">Or drop a file anywhere on this page. Up to about 33 MB after compression.</p>
+    </section>
+
+    <p class="error" id="error" role="alert" hidden></p>
+
+    <p class="caution">Flashing colors. Not suitable for people with photosensitive epilepsy.</p>
+  </main>
+
+  <div class="stage" id="stage" hidden>
+    <div class="stage__bar">
+      <p class="stage__file"><span class="stage__name" id="name"></span> <span class="stage__size" id="size"></span></p>
+      <button type="button" class="btn btn--ghost btn--small" id="stop">Stop</button>
+    </div>
+    <div class="stage__area" id="area">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/send.js"></script>
+  <script src="vendor/cimbar/send.2026-11-18T0531.js"></script>
+  <script src="vendor/cimbar/cimbar_js.2026-11-18T0531.js"></script>
+</body>
+</html>
