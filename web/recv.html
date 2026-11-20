@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Receive a file - Lumen Drop</title>
+  <meta name="theme-color" content="#19163a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-state="loading">
+  <main class="page page--recv">
+    <a class="back" href="./">Lumen Drop</a>
+
+    <header>
+      <h1 class="title">Receive a file</h1>
+      <p class="lede">Point this camera at the screen that's sending. The file is rebuilt on this device; nothing is uploaded.</p>
+    </header>
+
+    <section class="panel" data-show="loading start">
+      <button type="button" class="btn btn--primary" id="start" disabled>Loading decoder…</button>
+      <p class="note">Hold the camera steady with the whole code in view.</p>
+    </section>
+
+    <section class="panel result" id="result" data-show="done">
+      <h2 class="result__title">File received</h2>
+      <p class="result__file"><span class="result__name" id="recv-name"></span> <span class="result__size" id="recv-size"></span></p>
+      <div class="actions">
+        <a class="btn btn--primary" id="save" href="#" download>Save file</a>
+        <button type="button" class="btn btn--ghost" id="share" hidden>Share</button>
+        <button type="button" class="btn btn--ghost" id="again">Receive another</button>
+      </div>
+      <p class="note">Only open files from people you trust.</p>
+    </section>
+
+    <section class="panel" data-show="error">
+      <p class="error" id="error" role="alert"></p>
+      <button type="button" class="btn btn--primary" id="retry">Try again</button>
+    </section>
+  </main>
+
+  <div class="stage stage--scan" id="stage" hidden>
+    <video id="video" playsinline muted></video>
+    <svg class="aim" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 18V0h18M82 0h18v18M100 82v18H82M18 100H0V82" fill="none" stroke="#fff" stroke-width="3" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div class="hud">
+      <div class="ring" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><circle class="ring__track" cx="32" cy="32" r="26"/><circle class="ring__fill" id="ring" cx="32" cy="32" r="26"/></svg>
+        <span class="ring__pct" id="pct">0%</span>
+      </div>
+      <p class="hud__status" id="status" aria-live="polite"></p>
+      <button type="button" class="btn btn--ghost btn--small" id="cancel">Stop</button>
+    </div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/recv.js"></script>
+  <script src="vendor/cimbar/cimbar_js.2026-11-18T0531.js"></script>
+</body>
+</html>
