@@ -37,6 +37,7 @@
 
   // Open recv.html#debug to see what the camera delivers and what the decoder says.
   const DEBUG = location.hash.startsWith("#debug");
+  const HIRES = location.hash === "#debug-4k"; // ask the camera for 4K instead of 1080p
   const stats = { frame: "", luma: "", posted: 0, bytes: 0, found: 0, missed: 0, errors: 0, last: "" };
 
   // Brightness of a sample of the pixels handed to the decoder: an all-black or flat frame
@@ -151,8 +152,8 @@
         audio: false,
         video: {
           facingMode: "environment",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: HIRES ? 3840 : 1920 },
+          height: { ideal: HIRES ? 2160 : 1080 },
           frameRate: { ideal: 15 },
         },
       });
@@ -251,6 +252,21 @@
       inFlight--;
       if (msg.bitmap) msg.bitmap.close();
     }
+  }
+
+  // Debug: save the current camera frame at full resolution, to study it offline.
+  function saveFrame() {
+    const c = document.createElement("canvas");
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.getContext("2d").drawImage(video, 0, 0);
+    c.toBlob((blob) => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `lumen-frame-${c.width}x${c.height}-${frames}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }, "image/png");
   }
 
   function showDebug() {
@@ -424,6 +440,10 @@
   UI.$("#retry").addEventListener("click", start);
   UI.$("#again").addEventListener("click", start);
   UI.$("#cancel").addEventListener("click", cancel);
+  if (DEBUG) {
+    UI.$("#save-frame").hidden = false;
+    UI.$("#save-frame").addEventListener("click", saveFrame);
+  }
 
   UI.registerSW();
 })();

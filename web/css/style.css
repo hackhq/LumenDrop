@@ -554,3 +554,11 @@ body[data-state="error"] [data-show~="error"] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.debug-save {
+  position: absolute;
+  right: 12px;
+  bottom: 120px;
+  z-index: 1;
+  background: rgb(0 0 0 / 0.72);
+}

@@ -247,3 +247,47 @@ test("recv.html#debug-bitmap forces the createImageBitmap path and still decodes
     await browser.close();
   }
 });
+
+test("#debug Save frame downloads a full-resolution PNG of the camera frame", async () => {
+  const browser = await launchBrowser(["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]);
+  try {
+    const page = await openPage(browser, server.base + "recv.html#debug");
+    await page.waitFor(ready, 20000);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("document.body.dataset.state === 'scanning' && document.querySelector('#video').videoWidth > 0");
+    const [w, h] = await page.eval("[document.querySelector('#video').videoWidth, document.querySelector('#video').videoHeight]");
+    rmSync(downloads, { recursive: true, force: true });
+    mkdirSync(downloads, { recursive: true });
+    await browser.cdp.send("Browser.setDownloadBehavior", { behavior: "allowAndName", downloadPath: downloads, eventsEnabled: true });
+    const done = new Promise((resolve) => {
+      const off = browser.cdp.on((m) => {
+        if (m.method === "Browser.downloadProgress" && m.params.state === "completed") { off(); resolve(m.params.guid); }
+      });
+    });
+    assert.equal(await page.eval("document.querySelector('#save-frame').hidden"), false);
+    await page.eval("document.querySelector('#save-frame').click()");
+    const png = readFileSync(join(downloads, await done));
+    assert.equal(png.toString("latin1", 1, 4), "PNG");
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [w, h]);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("#debug-4k asks the camera for 3840x2160", async () => {
+  const browser = await launchBrowser(["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]);
+  try {
+    const page = await openPage(browser, server.base + "recv.html#debug-4k");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(() => {
+      const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (c) => { window.__asked = c; return gum(c); };
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("!!window.__asked");
+    assert.deepEqual(await page.eval("[__asked.video.width.ideal, __asked.video.height.ideal]"), [3840, 2160]);
+  } finally {
+    await browser.close();
+  }
+});
