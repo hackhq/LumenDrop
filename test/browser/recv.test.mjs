@@ -216,6 +216,7 @@ test("recv.html#debug shows live decoder diagnostics", async () => {
     assert.match(text, /frame (VideoFrame|bitmap)/);
     assert.match(text, /video \d+x\d+/);
     assert.match(text, /posted \d+/);
+    assert.match(text, /pixels luma min \d+ max \d+ mean \d+/);
     assert.equal(await page.eval("document.querySelector('#debug').hidden"), false);
   } finally {
     await browser.close();
@@ -228,6 +229,20 @@ test("debug panel stays hidden without #debug", async () => {
     const page = await openPage(browser, server.base + "recv.html");
     await page.waitFor(ready, 20000);
     assert.equal(await page.eval("document.querySelector('#debug')?.hidden"), true);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("recv.html#debug-bitmap forces the createImageBitmap path and still decodes", async () => {
+  const browser = await fakeCam();
+  try {
+    const page = await openPage(browser, server.base + "recv.html#debug-bitmap");
+    await page.waitFor(ready, 20000);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("/frame bitmap/.test(document.querySelector('#debug').textContent) || document.body.dataset.state === 'done'", 20000);
+    await page.waitFor("document.body.dataset.state === 'done'", 60000);
+    assert.match(await page.eval("document.querySelector('#debug').textContent"), /frame bitmap/);
   } finally {
     await browser.close();
   }

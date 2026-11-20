@@ -31,12 +31,30 @@
   let mode = 0;
   let fountain = null;    // {ptr, size} in the WASM heap
   let scratch = null;     // {ptr, size} for report and file name strings
-  let useVideoFrame = typeof VideoFrame === "function";
+  // #debug-bitmap skips VideoFrame and uses the createImageBitmap path, for comparing the two.
+  let useVideoFrame = typeof VideoFrame === "function" && location.hash !== "#debug-bitmap";
   let resultUrl = null;
 
   // Open recv.html#debug to see what the camera delivers and what the decoder says.
-  const DEBUG = location.hash === "#debug";
-  const stats = { frame: "", posted: 0, bytes: 0, found: 0, missed: 0, errors: 0, last: "" };
+  const DEBUG = location.hash.startsWith("#debug");
+  const stats = { frame: "", luma: "", posted: 0, bytes: 0, found: 0, missed: 0, errors: 0, last: "" };
+
+  // Brightness of a sample of the pixels handed to the decoder: an all-black or flat frame
+  // means the browser gave us no usable image.
+  function lumaStats(px, format, width, height) {
+    let min = 255;
+    let max = 0;
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < width * height; i += 997) {
+      const v = format === "RGBA" ? Math.round(px[i * 4] * 0.299 + px[i * 4 + 1] * 0.587 + px[i * 4 + 2] * 0.114) : px[i];
+      if (v < min) min = v;
+      if (v > max) max = v;
+      sum += v;
+      count++;
+    }
+    return `luma min ${min} max ${max} mean ${Math.round(sum / count)}`;
+  }
   let lastId = null;      // id of the file libcimbar rebuilt last
 
   // ---------- WASM heap helpers (views are re-made every time: the heap can grow) ----------
@@ -64,6 +82,7 @@
   }
 
   function stopCamera() {
+    if (DEBUG) showDebug();
     running = false;
     session++;
     if (frameHandle) {
@@ -205,6 +224,7 @@
           useVideoFrame = false;
           return null;
         }
+        if (DEBUG) stats.luma = lumaStats(pixels, format, vf.displayWidth, vf.displayHeight);
         return { pixels, format, width: vf.displayWidth, height: vf.displayHeight, mode: frameMode };
       } catch {
         useVideoFrame = false; // e.g. no RGBA conversion support: use the bitmap path
@@ -213,7 +233,10 @@
         vf.close();
       }
     }
-    if (DEBUG) stats.frame = `bitmap ${video.videoWidth}x${video.videoHeight}`;
+    if (DEBUG) {
+      stats.frame = `bitmap ${video.videoWidth}x${video.videoHeight}`;
+      stats.luma = "luma n/a (converted in the worker)";
+    }
     const bitmap = await createImageBitmap(video);
     return { bitmap, format: "RGBA", width: video.videoWidth, height: video.videoHeight, mode: frameMode };
   }
@@ -235,6 +258,7 @@
     box.hidden = false;
     box.textContent = [
       `frame ${stats.frame || "(none yet)"}`,
+      `pixels ${stats.luma || "-"}`,
       `video ${video.videoWidth}x${video.videoHeight}  workers ${workersReady}/${workers.length}  mode ${mode || "auto"}`,
       `frames ${frames}  posted ${stats.posted}  in flight ${inFlight}`,
       `replies: data ${stats.bytes}  code found ${stats.found}  no code ${stats.missed}  errors ${stats.errors}`,
