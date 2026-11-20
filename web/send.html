@@ -22,7 +22,7 @@
     <section class="panel drop" id="drop">
       <input type="file" id="file" class="visually-hidden" tabindex="-1">
       <button type="button" class="btn btn--primary" id="choose" disabled>Loading encoder…</button>
-      <p class="note">Or drop a file anywhere on this page. Up to about 33 MB after compression.</p>
+      <p class="note">Or drop a file anywhere on this page. Files up to about 20 MB work best.</p>
     </section>
 
     <p class="error" id="error" role="alert" hidden></p>
@@ -37,6 +37,7 @@
     </div>
     <div class="stage__area" id="area">
       <canvas id="canvas"></canvas>
+      <p class="stage__note">Preparing file…</p>
     </div>
   </div>
 

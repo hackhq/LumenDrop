@@ -86,12 +86,21 @@ test("receive page decodes the sender's barcode and saves the exact file", async
     assert.equal(sha256(bytes), sha256(payload));
     assert.ok(!suggested.includes("/"), `unsafe download name: ${suggested}`);
 
-    // A second transfer in the same session.
+    // A second transfer in the same session. The sender still shows the same file, which
+    // libcimbar can't rebuild twice in one page load: the page must notice on the first
+    // chunk (before any progress) and reload to scan again.
+    await page.eval(`(() => {
+      const pct = document.querySelector('#pct');
+      new MutationObserver(() => sessionStorage.setItem('oldPagePct', pct.textContent))
+        .observe(pct, { childList: true, characterData: true, subtree: true });
+      return true;
+    })()`);
     await page.eval("document.querySelector('#again').click()");
     await page.waitFor("document.body.dataset.state === 'scanning'");
     await page.waitFor("document.body.dataset.state === 'done'", 90000);
     const again = await downloadVia(page, browser.cdp);
     assert.equal(sha256(again.bytes), sha256(payload));
+    assert.equal(await page.eval("sessionStorage.getItem('oldPagePct')"), "0%", "repeat must be caught before receiving it");
 
     assert.deepEqual(page.log.errors, []);
     assert.deepEqual(foreignRequests(page.log, server.base), []);
@@ -115,6 +124,80 @@ test("blocked camera shows how to fix it and a retry button", async () => {
     assert.equal(await page.eval("document.querySelector('#stage').hidden"), true);
     await page.screenshot("recv-blocked.png");
     assert.deepEqual(page.log.errors, []);
+  } finally {
+    await browser.close();
+  }
+});
+
+// ---- review fixes ----
+
+const fakeCam = () => launchBrowser([
+  "--use-fake-ui-for-media-stream",
+  "--use-fake-device-for-media-stream",
+  `--use-file-for-fake-video-capture=${video}`,
+]);
+
+test("Stop while the camera is still starting leaves no camera running", async () => {
+  const browser = await fakeCam();
+  try {
+    const page = await openPage(browser, server.base + "recv.html");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(() => {
+      window.__streams = [];
+      const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (c) =>
+        new Promise((r) => setTimeout(r, 1500)).then(() => gum(c)).then((s) => (__streams.push(s), s));
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.eval("document.querySelector('#cancel').click()");
+    await sleep(2500);
+    assert.equal(await page.eval("document.body.dataset.state"), "start");
+    assert.equal(await page.eval("document.querySelector('#video').srcObject"), null);
+    assert.equal(await page.eval("__streams.length"), 1);
+    assert.equal(await page.eval("__streams.every((s) => s.getTracks().every((t) => t.readyState === 'ended'))"), true, "camera left running");
+    assert.deepEqual(page.log.errors, []);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("a frame that fails to capture doesn't stop scanning", async () => {
+  const browser = await fakeCam();
+  try {
+    const page = await openPage(browser, server.base + "recv.html");
+    await page.waitFor(ready, 20000);
+    await page.eval(`(() => {
+      delete window.VideoFrame; // force the createImageBitmap path
+      const orig = window.createImageBitmap;
+      let calls = 0;
+      window.createImageBitmap = (...a) => (++calls === 1 ? Promise.reject(new Error("capture failed")) : orig(...a));
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("document.body.dataset.state === 'done'", 60000);
+    assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), NAME);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("a broken compressed stream is reported, not saved as a short file", async () => {
+  const browser = await fakeCam();
+  try {
+    const page = await openPage(browser, server.base + "recv.html");
+    await page.waitFor(ready, 20000);
+    // libcimbar signals a zstd error with 0 bytes first and the error code on the next read.
+    await page.eval(`(() => {
+      const read = Module._cimbard_decompress_read;
+      let calls = 0;
+      Module._cimbard_decompress_read = (id, buf, size) => (++calls === 2 ? 0 : calls === 3 ? -14 : read(id, buf, size));
+      return true;
+    })()`);
+    await page.eval("document.querySelector('#start').click()");
+    await page.waitFor("['done', 'error'].includes(document.body.dataset.state)", 60000);
+    assert.equal(await page.eval("document.body.dataset.state"), "error");
+    assert.match(await page.eval("document.querySelector('#error').textContent"), /couldn't be rebuilt/);
   } finally {
     await browser.close();
   }

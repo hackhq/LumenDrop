@@ -21,6 +21,7 @@
   let inFlight = 0;
 
   let running = false;
+  let session = 0;        // bumped on every start/stop, so a late camera grant can tell it was cancelled
   let stream = null;
   let frameHandle = 0;
   let frames = 0;
@@ -60,6 +61,7 @@
 
   function stopCamera() {
     running = false;
+    session++;
     if (frameHandle) {
       if ("cancelVideoFrameCallback" in video) video.cancelVideoFrameCallback(frameHandle);
       else cancelAnimationFrame(frameHandle);
@@ -95,6 +97,7 @@
   }
 
   async function start() {
+    if (document.body.dataset.state === "scanning") return;
     if (resultUrl) URL.revokeObjectURL(resultUrl);
     resultUrl = null;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -118,9 +121,10 @@
     UI.setState("scanning");
     UI.enterFullscreen();
     UI.keepAwake();
+    const mine = ++session;
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const granted = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
           facingMode: "environment",
@@ -129,12 +133,18 @@
           frameRate: { ideal: 15 },
         },
       });
+      if (mine !== session) {
+        granted.getTracks().forEach((t) => t.stop()); // Stop was tapped while the camera started
+        return;
+      }
+      stream = granted;
       video.srcObject = stream;
       await video.play();
     } catch (err) {
-      fail(cameraError(err));
+      if (mine === session) fail(cameraError(err));
       return;
     }
+    if (mine !== session) return;
     running = true;
     schedule();
   }
@@ -156,12 +166,17 @@
   async function onFrame() {
     if (!running) return;
     frames++;
-    if (workersReady === workers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
-      const msg = await grab(mode || MODES[frames % MODES.length]);
-      if (msg && running) post(msg);
+    try {
+      if (workersReady === workers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
+        const msg = await grab(mode || MODES[frames % MODES.length]);
+        if (msg && running) post(msg);
+      }
+      if (frames % 8 === 0) updateStatus();
+    } catch {
+      // A frame that can't be captured is skipped; the next one may work.
+    } finally {
+      schedule();
     }
-    if (frames % 8 === 0) updateStatus();
-    schedule();
   }
 
   async function grab(frameMode) {
@@ -223,11 +238,28 @@
     if (!running) return;
     if (data.buff && data.buff.length) {
       if (mode && data.mode !== mode) return;
+      if (chunkFileId(data.buff) === lastId) {
+        reloadAndScan();
+        return;
+      }
       lastSeen = lastBytes = frames;
       feed(data.buff, data.mode);
     } else if (data.nodata) {
       lastSeen = frames;
     }
+  }
+
+  // Every fountain chunk starts with its file id (4 bytes, little-endian).
+  function chunkFileId(buff) {
+    return (buff[0] | (buff[1] << 8) | (buff[2] << 16) | (buff[3] << 24)) >>> 0;
+  }
+
+  // libcimbar keeps only the file it rebuilt last and can't rebuild that id again in this
+  // page load. Reload for a fresh decoder and carry on scanning.
+  function reloadAndScan() {
+    stopCamera();
+    history.replaceState(null, "", "#scan");
+    location.reload();
   }
 
   function feed(buff, frameMode) {
@@ -258,13 +290,6 @@
 
   function finish(id) {
     stopCamera();
-    if (id === lastId) {
-      // libcimbar keeps only the file it rebuilt last and can't rebuild that id again in
-      // this page load. Reload for a fresh decoder and carry on scanning.
-      history.replaceState(null, "", "#scan");
-      location.reload();
-      return;
-    }
     lastId = id;
     try {
       const name = readString((ptr, size) => Module._cimbard_get_filename(id, ptr, size)) || `received-${id}`;
@@ -272,11 +297,17 @@
       const buf = Module._malloc(chunkSize);
       const chunks = [];
       try {
-        for (;;) {
+        // A broken stream reads as 0 bytes once before the error code appears, so the
+        // end of the file is two empty reads in a row.
+        for (let empty = 0; empty < 2;) {
           const n = Module._cimbard_decompress_read(id, buf, chunkSize);
           if (n < 0) throw new Error(`decompress failed (${n})`);
-          if (n === 0) break;
-          chunks.push(Module.HEAPU8.slice(buf, buf + n));
+          if (n === 0) {
+            empty++;
+          } else {
+            empty = 0;
+            chunks.push(Module.HEAPU8.slice(buf, buf + n));
+          }
         }
       } finally {
         Module._free(buf);

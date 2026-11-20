@@ -100,3 +100,80 @@ test("without WebGL the page explains instead of going blank", async () => {
     await noGL.close();
   }
 });
+
+// ---- review fixes ----
+
+async function spyEncoder(page) {
+  await page.eval(`(() => {
+    window.__enc = [];
+    const init = Module._cimbare_init_encode;
+    Module._cimbare_init_encode = (...a) => { __enc.push({ init: true }); return init(...a); };
+    const enc = Module._cimbare_encode;
+    Module._cimbare_encode = (p, n) => { const r = enc(p, n); __enc.push({ n, r }); return r; };
+    return true;
+  })()`);
+}
+
+test("picking another file while one is still being prepared never mixes their bytes", async () => {
+  const a = join(FIX, "A.bin");
+  const b = join(FIX, "B.bin");
+  writeFileSync(a, randomBytes(9 * 1024 * 1024));
+  writeFileSync(b, randomBytes(5 * 1024 * 1024));
+  const page = await openPage(browser, server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  await spyEncoder(page);
+  await page.setFiles("#file", [a]);
+  await sleep(60);
+  await page.eval("document.querySelector('#stop').click()");
+  await page.setFiles("#file", [b]);
+  await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing') && document.body.dataset.state === 'playing'", 30000);
+  await sleep(500);
+  const log = await page.eval("__enc");
+  const lastInit = log.map((e) => !!e.init).lastIndexOf(true);
+  const afterB = log.slice(lastInit + 1).reduce((s, e) => s + (e.n || 0), 0);
+  assert.equal(afterB, 5 * 1024 * 1024, "only B's bytes may follow B's init");
+  assert.equal(await page.eval("document.querySelector('#name').textContent"), "B.bin");
+  assert.deepEqual(page.log.errors, []);
+  await page.close();
+});
+
+test("a file the encoder can't prepare closes the stage and explains", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  // Skipping init leaves libcimbar without a compressor, so its encode genuinely returns -1.
+  await page.eval("Module._cimbare_init_encode = () => 0, true");
+  await page.setFiles("#file", [small]);
+  await page.waitFor("document.body.dataset.state === 'error'");
+  assert.equal(await page.eval("document.querySelector('#stage').hidden"), true);
+  assert.match(await page.eval("document.querySelector('#error').textContent"), /couldn't prepare/);
+  await page.close();
+});
+
+test("a file too big for browser memory closes the stage and says so", async () => {
+  const big = join(FIX, "big.bin");
+  writeFileSync(big, randomBytes(40 * 1024 * 1024));
+  const page = await openPage(browser, server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  await page.setFiles("#file", [big]);
+  await page.waitFor("document.body.dataset.state === 'error'", 60000);
+  assert.equal(await page.eval("document.querySelector('#stage').hidden"), true);
+  assert.match(await page.eval("document.querySelector('#error').textContent"), /too big/);
+  await page.screenshot("send-too-big.png");
+  await page.close();
+});
+
+test("after Stop the page no longer keeps the screen awake", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await page.eval(`(() => {
+    window.__wake = 0;
+    const fake = { release: async () => {}, addEventListener() {} };
+    Object.defineProperty(navigator, "wakeLock", { value: { request: async () => { __wake++; return fake; } } });
+    return true;
+  })()`);
+  await play(page, small);
+  await page.eval("document.querySelector('#stop').click()");
+  const before = await page.eval("__wake");
+  await sleep(3000);
+  assert.equal(await page.eval("__wake"), before, "wake lock requested again after Stop");
+  await page.close();
+});

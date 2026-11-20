@@ -16,8 +16,13 @@
   let ready = false;
   let looping = false;
   let aspect = 1;
+  let importing = false; // libcimbar is still reading/compressing a file
+  let pending = null;    // a file picked meanwhile; starts when the current import ends
 
   function showError(message) {
+    stage.hidden = true;
+    UI.exitFullscreen();
+    UI.releaseAwake();
     errorBox.textContent = message;
     errorBox.hidden = false;
     choose.disabled = true;
@@ -46,23 +51,49 @@
   }
 
   function play(file) {
-    if (!ready || !file) return;
+    if (!ready || !file || document.body.dataset.state === "error") return;
     errorBox.hidden = true;
     UI.$("#name").textContent = file.name;
     UI.$("#size").textContent = UI.formatBytes(file.size);
     document.title = `Sending ${file.name} - Lumen Drop`;
 
     stage.hidden = false;
+    stage.classList.add("is-preparing");
     UI.setState("playing");
     UI.enterFullscreen();
     fit();
+    UI.keepAwake();
 
+    // libcimbar's import can't be cancelled and feeds one shared compressor, so a
+    // second import must wait for the first to end or their bytes would mix.
+    if (importing) pending = file;
+    else begin(file);
+  }
+
+  function begin(file) {
+    importing = true;
     Send.importFile(file);
     if (!looping) {
       looping = true;
       Send.nextFrame(); // starts libcimbar's own requestAnimationFrame loop
     }
-    UI.keepAwake();
+  }
+
+  // Result of each chunk libcimbar's encoder takes: 1 = more to come, 0 = the file is
+  // ready to play, negative = failure. Calls after an import ends (the driver's final
+  // flush returns -1) are ignored.
+  function onEncoded(result) {
+    if (!importing || result === 1) return;
+    importing = false;
+    if (pending) {
+      const next = pending;
+      pending = null;
+      begin(next);
+      return;
+    }
+    if (document.body.dataset.state !== "playing") return; // stopped meanwhile
+    if (result === 0) stage.classList.remove("is-preparing");
+    else showError(`Lumen Drop couldn't prepare this file for sending (error ${result}). Try a smaller file, or reload the page.`);
   }
 
   function stop() {
@@ -79,7 +110,10 @@
     setTitle() {},       // we set our own title in play()
     setHTML() {},        // upstream status text; our UI shows its own
     setActive() {},      // the stage is already showing
-    prevent_sleep() { UI.keepAwake(); },
+    prevent_sleep() {
+      // libcimbar's loop keeps calling this after Stop; only honor it while sending.
+      if (document.body.dataset.state === "playing") UI.keepAwake();
+    },
     setAspectRatio(ratio) { aspect = ratio || 1; fit(); },
   };
 
@@ -89,12 +123,20 @@
       ready = true;
       Send.init_window(canvas);
       Send.setMode(MODE_B);
+      const encode = Module._cimbare_encode;
+      Module._cimbare_encode = (ptr, len) => {
+        const result = encode(ptr, len);
+        onEncoded(result);
+        return result;
+      };
       choose.textContent = "Choose a file";
       choose.disabled = false;
       UI.setState("pick");
     },
     onAbort() {
-      showError("The encoder failed to start. Reload the page to try again.");
+      showError(importing
+        ? "This file is too big for this browser's memory. Reload the page, then try a smaller file."
+        : "The encoder stopped working. Reload the page to try again.");
     },
   };
 

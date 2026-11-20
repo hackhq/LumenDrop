@@ -30,7 +30,10 @@ Browser tests build the binary, start it on a fixed port per file, and drive Chr
 
 - The fountain sink has no reset API and ignores finished file ids; it is rebuilt only when `_cimbard_configure_decode` gets a different mode. `start()` in `recv.js` relies on this for "Receive another".
 - The decoder keeps only the last rebuilt file id; rebuilding the same id again yields 0 bytes. `finish()` reloads the page with `#scan` (auto-start) in that case.
-- `Send` has no stop API; its render loop keeps running after Stop.
+- `Send` has no stop API; its render loop keeps running after Stop (and keeps calling `Report.prevent_sleep`, so that callback checks the page state).
+- `Send.importFile` is an uncancellable async FileReader chain feeding one shared compressor. `send.js` wraps `Module._cimbare_encode` to learn when an import ends (first return of `0`; `1` = more chunks; negative = failure) and queues any file picked meanwhile; never start two imports at once.
+- Each fountain chunk starts with its 4-byte little-endian file id; `recv.js` uses it to spot a repeat of the last rebuilt file on the first chunk.
+- Large files abort the encoder with OOM (~30 MB+ in desktop Chromium); `onAbort` during an import shows a "too big" error.
 
 ## Constraints
 

@@ -521,3 +521,22 @@ body[data-state="error"] [data-show~="error"] {
   margin: 0;
   font-size: 0.95rem;
 }
+
+/* Canvas and note share one cell; the note shows only while the canvas is hidden. */
+.stage__area > * {
+  grid-area: 1 / 1;
+}
+
+.stage__note {
+  display: none;
+  margin: 0;
+  color: var(--mist);
+}
+
+.stage.is-preparing #canvas {
+  visibility: hidden;
+}
+
+.stage.is-preparing .stage__note {
+  display: block;
+}

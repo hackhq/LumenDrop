@@ -16,7 +16,9 @@ It is a small web app (installable, works offline) built on
 - **The server only delivers the app.** Files never touch it. After the first visit, a
   service worker serves everything from the device, so it works with no network at all.
 
-Files up to about 33 MB (after compression) at roughly 100 KB/s.
+Speed is roughly 100 KB/s. Files up to 20 MB are tested; in desktop Chromium the encoder runs
+out of memory somewhere around 30 MB (the page says so instead of failing silently). Phones may
+have a lower limit; this is not yet measured.
 
 ## Use it
 
