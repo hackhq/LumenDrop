@@ -35,6 +35,13 @@ Browser tests build the binary, start it on a fixed port per file, and drive Chr
 - Each fountain chunk starts with its 4-byte little-endian file id; `recv.js` uses it to spot a repeat of the last rebuilt file on the first chunk.
 - Large files abort the encoder with OOM (~30 MB+ in desktop Chromium); `onAbort` during an import shows a "too big" error.
 
+## Sender/receiver tuning
+
+- Send stage controls: Resolution Low/Medium/High = libcimbar modes Bu (66) / Bm (67) / B (68, default); speed 5/8/12/15 fps via `Send.setFPS`. Saved in `localStorage` (`lumen-send-mode`, `lumen-send-fps`); `send.html?fps=N` overrides the saved speed. Changing resolution re-encodes the current file (libcimbar drops a stream that doesn't fit a new mode).
+- Receiver: locks the first mode that yields data; releases the lock after 3 s without data (`RELOCK_MS`) so it follows a resolution change. `recv.html?camfps=N` sets the camera frame rate (default 15). Camera stays at ideal 1920x1080: 4K frames make the decoder abort with OOM.
+- Debug: `recv.html#debug` (live counters, pixel brightness, Save frame), `#debug-bitmap` (forces the `createImageBitmap` path). Decoder result `-3` means the four corner anchors weren't found.
+- The code shifts a few pixels every frame on purpose (libcimbar `shake()`): blended frames then show doubled anchors and fail fast at the scan step. Real-device failures so far (iPhone + laptop LCD) were all frames blending two codes, not pixel-format problems.
+
 ## Constraints
 
 - No inline scripts, styles, or `on*=` handlers (CSP `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'`); setting styles via CSSOM (`el.style.setProperty`) is fine.

@@ -274,7 +274,7 @@ test("#debug Save frame downloads a full-resolution PNG of the camera frame", as
   }
 });
 
-test("#debug-4k asks the camera for 3840x2160", async () => {
+test("the camera is asked for 1080p, never 4K (the decoder runs out of memory on 4K frames)", async () => {
   const browser = await launchBrowser(["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"]);
   try {
     const page = await openPage(browser, server.base + "recv.html#debug-4k");
@@ -286,7 +286,7 @@ test("#debug-4k asks the camera for 3840x2160", async () => {
     })()`);
     await page.eval("document.querySelector('#start').click()");
     await page.waitFor("!!window.__asked");
-    assert.deepEqual(await page.eval("[__asked.video.width.ideal, __asked.video.height.ideal]"), [3840, 2160]);
+    assert.deepEqual(await page.eval("[__asked.video.width.ideal, __asked.video.height.ideal]"), [1920, 1080]);
   } finally {
     await browser.close();
   }

@@ -29,6 +29,30 @@ instead of failing silently. Limits on phones are not yet measured.
    sending screen with the whole code in view.
 4. When it reaches 100%, tap **Save file** (or **Share** on phones).
 
+While the code plays, the bar at the top has two controls. Each is remembered on that device:
+
+- **Resolution (Low / Medium / High):** lower resolution draws bigger symbols, which weaker
+  cameras read more easily, but each frame carries less, so the transfer takes more frames
+  (Low carries about 44% of High, Medium about 70%). The receiver follows a change by itself.
+- **Speed (5 / 8 / 12 / 15 fps):** slower keeps each frame on screen longer.
+
+The code also moves a few pixels every frame. That is libcimbar's design, not a glitch: it
+lets the receiver throw away blurred frames early
+([explanation](https://github.com/sz3/libcimbar/issues/127)).
+
+### If the receiver stays at 0%
+
+The usual cause is the camera blending two consecutive codes into one blurry frame (a slow
+shutter in a dim room, or a slow laptop LCD). Try, in this order:
+
+1. Turn on the room lights and lower the sending screen's brightness a little.
+2. Choose **Low** resolution and **8** (or **5**) fps on the sender.
+3. Open the receiver as `recv.html?camfps=30`, which caps the camera's shutter time.
+
+`recv.html#debug` shows what the camera delivers and what the decoder reports, with a
+**Save frame** button for a full-resolution still. `#debug-bitmap` forces the fallback
+capture path for comparison.
+
 ## Run locally
 
 Requires Go 1.22+.

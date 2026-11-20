@@ -39,7 +39,6 @@
 
   // Open recv.html#debug to see what the camera delivers and what the decoder says.
   const DEBUG = location.hash.startsWith("#debug");
-  const HIRES = location.hash === "#debug-4k"; // ask the camera for 4K instead of 1080p
   // ?camfps=30 asks for more camera frames per second, which also caps the shutter time
   // (iOS can expose for up to 1/fps), so fewer frames blend two codes together.
   const requestedFps = Number(new URLSearchParams(location.search).get("camfps"));
@@ -158,8 +157,9 @@
         audio: false,
         video: {
           facingMode: "environment",
-          width: { ideal: HIRES ? 3840 : 1920 },
-          height: { ideal: HIRES ? 2160 : 1080 },
+          // Not 4K: libcimbar's decoder runs out of WASM memory on 2160x3840 frames.
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: CAMERA_FPS },
         },
       });
