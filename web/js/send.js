@@ -68,14 +68,18 @@
     document.title = `Sending ${file.name} - Lumen Drop`;
 
     stage.hidden = false;
-    stage.classList.add("is-preparing");
     UI.setState("playing");
     UI.enterFullscreen();
     fit();
     UI.keepAwake();
 
-    // libcimbar's import can't be cancelled and feeds one shared compressor, so a
-    // second import must wait for the first to end or their bytes would mix.
+    encode(file);
+  }
+
+  // libcimbar's import can't be cancelled and feeds one shared compressor, so a
+  // second import must wait for the first to end or their bytes would mix.
+  function encode(file) {
+    stage.classList.add("is-preparing");
     if (importing) pending = file;
     else begin(file);
   }
@@ -215,7 +219,8 @@
         // not remembered; still applies now
       }
       // Re-encode for the new layout (libcimbar drops streams that don't fit a new mode).
-      if (currentFile && document.body.dataset.state === "playing") play(currentFile);
+      // Only the code changes: fullscreen and the rest of the stage stay as the user left them.
+      if (currentFile && document.body.dataset.state === "playing") encode(currentFile);
     });
   }
   for (const b of document.querySelectorAll("[data-fps]")) {

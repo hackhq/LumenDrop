@@ -272,3 +272,21 @@ test("resolution buttons (Low/Medium/High) switch the code while playing, and ar
   assert.deepEqual(page.log.errors, []);
   await page.close();
 });
+
+test("changing resolution while playing doesn't force fullscreen again", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await play(page, small);
+  await page.eval(`(() => {
+    window.__fs = 0;
+    const req = Element.prototype.requestFullscreen;
+    Element.prototype.requestFullscreen = function (...a) { __fs++; return req.apply(this, a); };
+    return true;
+  })()`);
+  // A real click (user gesture), as when someone left fullscreen and then picks Low.
+  await page.s("Runtime.evaluate", { expression: "document.querySelector('[data-mode=\"66\"]').click()", userGesture: true });
+  await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing')");
+  assert.equal(await page.eval("__fs"), 0, "requestFullscreen was called");
+  assert.equal(await page.eval("document.body.dataset.state"), "playing");
+  await page.eval("localStorage.clear(), true");
+  await page.close();
+});
