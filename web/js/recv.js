@@ -33,6 +33,10 @@
   let scratch = null;     // {ptr, size} for report and file name strings
   let useVideoFrame = typeof VideoFrame === "function";
   let resultUrl = null;
+
+  // Open recv.html#debug to see what the camera delivers and what the decoder says.
+  const DEBUG = location.hash === "#debug";
+  const stats = { frame: "", posted: 0, bytes: 0, found: 0, missed: 0, errors: 0, last: "" };
   let lastId = null;      // id of the file libcimbar rebuilt last
 
   // ---------- WASM heap helpers (views are re-made every time: the heap can grow) ----------
@@ -189,6 +193,10 @@
         return null;
       }
       try {
+        if (DEBUG) {
+          const vr = vf.visibleRect || { width: 0, height: 0 };
+          stats.frame = `VideoFrame ${vf.format} coded ${vf.codedWidth}x${vf.codedHeight} visible ${vr.width}x${vr.height} display ${vf.displayWidth}x${vf.displayHeight}${vf.rotation ? ` rotation ${vf.rotation}` : ""}`;
+        }
         const opts = PIXEL_FORMATS.includes(vf.format) ? {} : { format: "RGBA" };
         const pixels = new Uint8Array(vf.allocationSize(opts));
         await vf.copyTo(pixels, opts);
@@ -205,6 +213,7 @@
         vf.close();
       }
     }
+    if (DEBUG) stats.frame = `bitmap ${video.videoWidth}x${video.videoHeight}`;
     const bitmap = await createImageBitmap(video);
     return { bitmap, format: "RGBA", width: video.videoWidth, height: video.videoHeight, mode: frameMode };
   }
@@ -212,6 +221,7 @@
   function post(msg) {
     const worker = workers[nextWorker++ % workers.length];
     inFlight++;
+    stats.posted++;
     try {
       worker.postMessage(msg, [msg.pixels ? msg.pixels.buffer : msg.bitmap]);
     } catch {
@@ -220,7 +230,21 @@
     }
   }
 
+  function showDebug() {
+    const box = UI.$("#debug");
+    box.hidden = false;
+    box.textContent = [
+      `frame ${stats.frame || "(none yet)"}`,
+      `video ${video.videoWidth}x${video.videoHeight}  workers ${workersReady}/${workers.length}  mode ${mode || "auto"}`,
+      `frames ${frames}  posted ${stats.posted}  in flight ${inFlight}`,
+      `replies: data ${stats.bytes}  code found ${stats.found}  no code ${stats.missed}  errors ${stats.errors}`,
+      `last: ${stats.last || "-"}`,
+      navigator.userAgent,
+    ].join("\n");
+  }
+
   function updateStatus() {
+    if (DEBUG) showDebug();
     if (frames - lastBytes < 30) setStatus(`Receiving… keep holding steady.`);
     else if (frames - lastSeen < 30) setStatus("Code found. Hold steady and fill more of the view with it.");
     else setStatus("Point the camera at the code on the other screen.");
@@ -235,6 +259,13 @@
       return;
     }
     inFlight = Math.max(0, inFlight - 1);
+    if (DEBUG) {
+      if (data.buff && data.buff.length) stats.bytes++;
+      else if (data.nodata) stats.found++;
+      else if (data.failed_extract) stats.missed++;
+      else stats.errors++;
+      if (typeof data.res === "string" || typeof data.error === "string") stats.last = String(data.res || data.error).slice(0, 160);
+    }
     if (!running) return;
     if (data.buff && data.buff.length) {
       if (mode && data.mode !== mode) return;
