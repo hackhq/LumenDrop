@@ -16,9 +16,10 @@ It is a small web app (installable, works offline) built on
 - **The server only delivers the app.** Files never touch it. After the first visit, a
   service worker serves everything from the device, so it works with no network at all.
 
-Speed is roughly 100 KB/s. Files up to 20 MB are tested; in desktop Chromium the encoder runs
-out of memory somewhere around 30 MB (the page says so instead of failing silently). Phones may
-have a lower limit; this is not yet measured.
+Speed is roughly 100 KB/s (libcimbar's figure; not yet measured with this app). So far, full
+send-to-receive runs are tested with small files (20 KB); the sender has encoded files up to 20 MB.
+In desktop Chromium the encoder runs out of memory somewhere around 30 MB, and the page says so
+instead of failing silently. Limits on phones are not yet measured.
 
 ## Use it
 

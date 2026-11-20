@@ -17,6 +17,7 @@
   let looping = false;
   let aspect = 1;
   let importing = false; // libcimbar is still reading/compressing a file
+  let outcome = null;    // first decisive encode result of the current import: 0 = ready, < 0 = failed
   let pending = null;    // a file picked meanwhile; starts when the current import ends
 
   function showError(message) {
@@ -72,6 +73,7 @@
 
   function begin(file) {
     importing = true;
+    outcome = null;
     Send.importFile(file);
     if (!looping) {
       looping = true;
@@ -79,11 +81,15 @@
     }
   }
 
-  // Result of each chunk libcimbar's encoder takes: 1 = more to come, 0 = the file is
-  // ready to play, negative = failure. Calls after an import ends (the driver's final
-  // flush returns -1) are ignored.
-  function onEncoded(result) {
-    if (!importing || result === 1) return;
+  // Called for every chunk libcimbar's encoder takes. Results: 1 = more to come, 0 = the file
+  // is ready, negative = failure (a flush after "ready" also returns -1, which is harmless).
+  // The driver always ends an import with one zero-length flush, so that call, not the
+  // first 0, is when the next import may start.
+  function onEncoded(result, len) {
+    if (!importing) return;
+    if (outcome === null && (result === 0 || (result < 0 && len > 0))) outcome = result;
+    if (len > 0) return;
+    if (outcome === null) outcome = result;
     importing = false;
     if (pending) {
       const next = pending;
@@ -92,8 +98,8 @@
       return;
     }
     if (document.body.dataset.state !== "playing") return; // stopped meanwhile
-    if (result === 0) stage.classList.remove("is-preparing");
-    else showError(`Lumen Drop couldn't prepare this file for sending (error ${result}). Try a smaller file, or reload the page.`);
+    if (outcome === 0) stage.classList.remove("is-preparing");
+    else showError(`Lumen Drop couldn't prepare this file for sending (error ${outcome}). Try a smaller file, or reload the page.`);
   }
 
   function stop() {
@@ -126,7 +132,7 @@
       const encode = Module._cimbare_encode;
       Module._cimbare_encode = (ptr, len) => {
         const result = encode(ptr, len);
-        onEncoded(result);
+        onEncoded(result, len);
         return result;
       };
       choose.textContent = "Choose a file";

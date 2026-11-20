@@ -117,8 +117,9 @@ async function spyEncoder(page) {
 test("picking another file while one is still being prepared never mixes their bytes", async () => {
   const a = join(FIX, "A.bin");
   const b = join(FIX, "B.bin");
-  writeFileSync(a, randomBytes(9 * 1024 * 1024));
-  writeFileSync(b, randomBytes(5 * 1024 * 1024));
+  // Sizes with a partial last chunk: that is where an import reports "ready" before its final flush.
+  writeFileSync(a, randomBytes(9_000_001));
+  writeFileSync(b, randomBytes(5_000_001));
   const page = await openPage(browser, server.base + "send.html");
   await page.waitFor(ready, 20000);
   await spyEncoder(page);
@@ -130,8 +131,9 @@ test("picking another file while one is still being prepared never mixes their b
   await sleep(500);
   const log = await page.eval("__enc");
   const lastInit = log.map((e) => !!e.init).lastIndexOf(true);
-  const afterB = log.slice(lastInit + 1).reduce((s, e) => s + (e.n || 0), 0);
-  assert.equal(afterB, 5 * 1024 * 1024, "only B's bytes may follow B's init");
+  const afterB = log.slice(lastInit + 1);
+  assert.deepEqual(afterB.filter((e) => e.n > 0 && e.r < 0), [], "B's chunks must all be accepted");
+  assert.equal(afterB.filter((e) => e.r >= 0).reduce((s, e) => s + e.n, 0), 5_000_001, "exactly B's bytes after B's init");
   assert.equal(await page.eval("document.querySelector('#name').textContent"), "B.bin");
   assert.deepEqual(page.log.errors, []);
   await page.close();
