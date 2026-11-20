@@ -254,7 +254,10 @@ test("resolution buttons (Low/Medium/High) switch the code while playing, and ar
   assert.deepEqual(await page.eval("[...document.querySelectorAll('[data-mode]')].map((b) => [b.textContent, b.dataset.mode])"),
     [["Low", "66"], ["Medium", "67"], ["High", "68"]]);
   assert.equal(await page.eval("document.querySelector('[data-mode]').closest('[role=group]').getAttribute('aria-label')"), "Resolution");
-  assert.equal(await page.eval("document.querySelector('[data-mode=\"68\"]').getAttribute('aria-pressed')"), "true");
+  assert.equal(await page.eval("document.querySelector('[data-mode=\"66\"]').getAttribute('aria-pressed')"), "true", "Low is the default");
+  await page.eval("document.querySelector('[data-mode=\"68\"]').click()");
+  await page.waitFor("!document.querySelector('#stage').classList.contains('is-preparing')");
+  await sleep(500);
   const ratio = () => page.eval("(() => { const r = document.querySelector('#canvas').getBoundingClientRect(); return r.width / r.height; })()");
   assert.ok(Math.abs((await ratio()) - 1) < 0.02, "High (mode B) is square");
   await page.eval("document.querySelector('[data-mode=\"66\"]').click()");
@@ -265,9 +268,10 @@ test("resolution buttons (Low/Medium/High) switch the code while playing, and ar
   const shot = decodePNG(await page.capture());
   assert.ok(colorfulFraction(shot, await canvasRect(page)) > 0.05, "still drawing a code");
   await page.screenshot("send-size-large.png");
+  await page.eval("document.querySelector('[data-mode=\"67\"]').click()"); // a non-default choice...
   await page.goto(server.base + "send.html");
   await page.waitFor(ready, 20000);
-  assert.equal(await page.eval("document.querySelector('[data-mode=\"66\"]').getAttribute('aria-pressed')"), "true", "choice remembered");
+  assert.equal(await page.eval("document.querySelector('[data-mode=\"67\"]').getAttribute('aria-pressed')"), "true", "choice remembered");
   await page.eval("localStorage.clear(), true");
   assert.deepEqual(page.log.errors, []);
   await page.close();

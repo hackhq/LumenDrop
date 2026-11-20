@@ -4,7 +4,17 @@
 // decoder and zstd decompressor here on the main thread (cimbar_js.*.js, `window.Module`).
 (() => {
   const WORKER_URL = "vendor/cimbar/recv-worker.2026-11-18T0531.js";
-  const MODES = [66, 68, 67, 4]; // Bu, B, Bm, 4C: tried in turn until one decodes, then locked
+  const MODES = [66, 68, 67]; // Low (Bu), High (B), Medium (Bm): tried in turn until one decodes, then locked
+  // A phone filming a bright screen gets glare: white areas bloom into the dark around them,
+  // greying the black rings of the code's corner anchors until the decoder can't find them.
+  // Raising the black point cuts that glare. Frames cycle through these (0 = untouched), so
+  // whichever suits the lighting gets tried; on clean frames all of them decode.
+  const BLACK_POINTS = [0, 160, 200];
+  const BLACK_LUTS = BLACK_POINTS.map((lo) => {
+    const lut = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) lut[i] = Math.max(0, Math.min(255, Math.round(((i - lo) * 255) / (255 - lo))));
+    return lut;
+  });
   const PIXEL_FORMATS = ["NV12", "I420"]; // VideoFrame formats the decoder reads directly
   const MAX_IN_FLIGHT = 30;
   const RING = 2 * Math.PI * 26;
@@ -16,7 +26,10 @@
   const status = UI.$("#status");
 
   const workers = [];
+  const sentLevels = []; // per worker, the black point of each frame it is working on (FIFO)
+  let preferredLevel = null; // the black point that last yielded data
   let workersReady = 0;
+  const readyWorkers = []; // indexes of workers whose WASM has loaded; frames go only to these
   let nextWorker = 0;
   let inFlight = 0;
 
@@ -143,6 +156,7 @@
       mode = 0;
     }
     frames = 0;
+    preferredLevel = null;
     lastSeen = lastBytes = -1000;
     setProgress(0);
     setStatus("Point the camera at the code on the other screen.");
@@ -198,11 +212,17 @@
     frames++;
     // The sender may have switched symbol size: if the locked mode has gone quiet, detect
     // again. The same mode re-locks without losing progress (libcimbar keeps its sink).
-    if (mode && performance.now() - lastBytesAt > RELOCK_MS) mode = 0;
+    if (mode && performance.now() - lastBytesAt > RELOCK_MS) {
+      mode = 0;
+      preferredLevel = null; // the scene may have changed too
+    }
     try {
-      if (workersReady === workers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
-        const msg = await grab(mode || MODES[frames % MODES.length]);
-        if (msg && running) post(msg);
+      // Start as soon as one decoder is up; slower ones join when they finish loading.
+      if (readyWorkers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
+        const level = pickLevel();
+        const frameMode = mode || MODES[Math.floor(frames / BLACK_POINTS.length) % MODES.length];
+        const msg = await grab(frameMode, level);
+        if (msg && running) post(msg, level);
       }
       if (frames % 8 === 0) updateStatus();
     } catch {
@@ -212,7 +232,21 @@
     }
   }
 
-  async function grab(frameMode) {
+  // Applies a black-point table to the pixels the decoder will read: the Y (brightness)
+  // plane of NV12/I420 frames, or each colour channel of RGBA.
+  function cutGlare(pixels, format, width, height, lut) {
+    if (format === "RGBA") {
+      for (let i = 0; i < width * height * 4; i += 4) {
+        pixels[i] = lut[pixels[i]];
+        pixels[i + 1] = lut[pixels[i + 1]];
+        pixels[i + 2] = lut[pixels[i + 2]];
+      }
+    } else {
+      for (let i = 0; i < width * height; i++) pixels[i] = lut[pixels[i]];
+    }
+  }
+
+  async function grab(frameMode, level) {
     if (useVideoFrame) {
       let vf;
       try {
@@ -235,6 +269,7 @@
           return null;
         }
         if (DEBUG) stats.luma = lumaStats(pixels, format, vf.displayWidth, vf.displayHeight);
+        if (level) cutGlare(pixels, format, vf.displayWidth, vf.displayHeight, BLACK_LUTS[level]);
         return { pixels, format, width: vf.displayWidth, height: vf.displayHeight, mode: frameMode };
       } catch {
         useVideoFrame = false; // e.g. no RGBA conversion support: use the bitmap path
@@ -247,16 +282,36 @@
       stats.frame = `bitmap ${video.videoWidth}x${video.videoHeight}`;
       stats.luma = "luma n/a (converted in the worker)";
     }
+    if (level) {
+      // The worker only sees RGBA for bitmaps it converts itself, so convert here instead.
+      const c = new OffscreenCanvas(video.videoWidth, video.videoHeight);
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(video, 0, 0);
+      const pixels = new Uint8Array(g.getImageData(0, 0, c.width, c.height).data.buffer);
+      cutGlare(pixels, "RGBA", c.width, c.height, BLACK_LUTS[level]);
+      return { pixels, format: "RGBA", width: c.width, height: c.height, mode: frameMode };
+    }
     const bitmap = await createImageBitmap(video);
     return { bitmap, format: "RGBA", width: video.videoWidth, height: video.videoHeight, mode: frameMode };
   }
 
-  function post(msg) {
-    const worker = workers[nextWorker++ % workers.length];
+  // Mostly the black point that last yielded data; every third frame tries the others in
+  // turn, in case the lighting changes. Before anything decodes, plain cycling.
+  // (Before anything decodes the mode also cycles, on frames / BLACK_POINTS.length, so every
+  // mode meets every black point.)
+  function pickLevel() {
+    if (preferredLevel === null) return frames % BLACK_POINTS.length;
+    if (frames % 3 === 0) return Math.floor(frames / 3) % BLACK_POINTS.length;
+    return preferredLevel;
+  }
+
+  function post(msg, level) {
+    const index = readyWorkers[nextWorker++ % readyWorkers.length];
     inFlight++;
     stats.posted++;
     try {
-      worker.postMessage(msg, [msg.pixels ? msg.pixels.buffer : msg.bitmap]);
+      workers[index].postMessage(msg, [msg.pixels ? msg.pixels.buffer : msg.bitmap]);
+      sentLevels[index].push(level);
     } catch {
       inFlight--;
       if (msg.bitmap) msg.bitmap.close();
@@ -284,7 +339,7 @@
     box.textContent = [
       `frame ${stats.frame || "(none yet)"}`,
       `pixels ${stats.luma || "-"}`,
-      `video ${video.videoWidth}x${video.videoHeight}  workers ${workersReady}/${workers.length}  mode ${mode || "auto"}`,
+      `video ${video.videoWidth}x${video.videoHeight}  workers ${workersReady}/${workers.length}  mode ${mode || "auto"}  black point ${preferredLevel === null ? "cycling" : BLACK_POINTS[preferredLevel]}`,
       `frames ${frames}  posted ${stats.posted}  in flight ${inFlight}`,
       `replies: data ${stats.bytes}  code found ${stats.found}  no code ${stats.missed}  errors ${stats.errors}`,
       `last: ${stats.last || "-"}`,
@@ -301,13 +356,15 @@
 
   // ---------- decoding ----------
 
-  function onWorkerMessage(event) {
+  function onWorkerMessage(event, index) {
     const data = event.data;
     if (data.type === "startWasm") {
       workersReady++;
+      readyWorkers.push(index);
       return;
     }
     inFlight = Math.max(0, inFlight - 1);
+    const level = sentLevels[index].shift(); // the worker answers its frames in order
     if (DEBUG) {
       if (data.buff && data.buff.length) stats.bytes++;
       else if (data.nodata) stats.found++;
@@ -324,6 +381,7 @@
       }
       lastSeen = lastBytes = frames;
       lastBytesAt = performance.now();
+      if (level !== undefined) preferredLevel = level;
       feed(data.buff, data.mode);
     } else if (data.nodata) {
       lastSeen = frames;
@@ -425,7 +483,9 @@
   const workerCount = Math.max(3, Math.min(Math.floor(cores / 2) + 1, 6));
   for (let i = 0; i < workerCount; i++) {
     const w = new Worker(WORKER_URL);
-    w.onmessage = onWorkerMessage;
+    const index = workers.length;
+    sentLevels.push([]);
+    w.onmessage = (event) => onWorkerMessage(event, index);
     w.onerror = () => fail("The decoder failed to start. Reload the page to try again.");
     workers.push(w);
   }

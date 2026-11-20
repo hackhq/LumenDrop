@@ -320,7 +320,7 @@ test("receiver follows the sender when it switches resolution mid-transfer", asy
   const sender = await launchBrowser();
   try {
     const page = await openPage(sender, server.base + "send.html", { width: 1280, height: 900 });
-    await page.eval("localStorage.clear(), true");
+    await page.eval("localStorage.clear(), localStorage.setItem('lumen-send-mode', '68'), true");
     await page.goto(server.base + "send.html?fps=5");
     await page.waitFor("!document.querySelector('#choose').disabled", 20000);
     await page.setFiles("#file", [src]);
@@ -360,6 +360,104 @@ test("receiver follows the sender when it switches resolution mid-transfer", asy
     assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), "switch.bin");
     const { bytes } = await downloadVia(page, browser.cdp);
     assert.equal(sha256(bytes), sha256(payload2));
+  } finally {
+    await browser.close();
+  }
+});
+
+// Records `count` distinct sender frames (one per rendered code) as base64 JPEGs.
+async function recordSender(file, mode, count) {
+  const sender = await launchBrowser();
+  try {
+    const page = await openPage(sender, server.base + "send.html", { width: 1280, height: 900 });
+    await page.eval(`(localStorage.setItem("lumen-send-mode", "${mode}"), true)`);
+    await page.goto(server.base + "send.html?fps=4");
+    await page.waitFor("!document.querySelector('#choose').disabled", 20000);
+    await page.setFiles("#file", [file]);
+    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')");
+    await page.eval(`(() => { window.__f = 0; const f = Module._cimbare_next_frame; Module._cimbare_next_frame = (...a) => (__f++, f(...a)); return true; })()`);
+    const frames = [];
+    let last = await page.eval("__f");
+    while (frames.length < count) {
+      const f = await page.eval("__f");
+      if (f !== last) {
+        await sleep(150);
+        const shot = await page.capture("jpeg", 90);
+        if (shot.length > 60000) frames.push(shot.toString("base64")); // skip the blank first renders
+        last = f;
+      }
+      await sleep(30);
+    }
+    await page.eval("localStorage.clear(), true");
+    return frames;
+  } finally {
+    await sender.close();
+  }
+}
+
+test("decodes through phone-camera glare (bright screen blooming over the code)", async () => {
+  // Small enough that the 32 looped camera frames hold every block it needs (a real sender
+  // keeps producing new frames, so size isn't limited by this in practice).
+  const payload3 = randomBytes(8 * 1024);
+  const src = join(FIX, "glare.bin");
+  writeFileSync(src, payload3);
+  const frames = await recordSender(src, 66, 32);
+
+  const browser = await launchBrowser();
+  try {
+    const page = await openPage(browser, server.base + "recv.html#debug");
+    await page.waitFor(ready, 20000);
+    // A portrait 1080x1920 "phone camera": the code slightly tilted and blurred, blacks lifted,
+    // and glare from bright areas spilling into the dark around them.
+    await page.eval(`(async () => {
+      const list = ${JSON.stringify(frames)};
+      const bitmaps = await Promise.all(list.map((b64) =>
+        createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
+      // Render each degraded camera frame once (software rendering of the filters is slow),
+      // then play them back like a camera.
+      const shots = [];
+      for (const f of bitmaps) {
+        const o = new OffscreenCanvas(1080, 1920);
+        const g = o.getContext("2d");
+        const w = 1040, h = Math.round(f.height * 1040 / f.width);
+        g.fillStyle = "rgb(30,30,34)";
+        g.fillRect(0, 0, 1080, 1920);
+        g.save();
+        g.translate(540, 480 + h / 2);
+        g.rotate(0.03);
+        g.filter = "blur(1.2px) brightness(1.2)";
+        g.drawImage(f, -w / 2, -h / 2, w, h);
+        g.globalCompositeOperation = "lighter";
+        g.filter = "brightness(0.62) contrast(12) blur(7px) brightness(0.6)";
+        g.drawImage(f, -w / 2, -h / 2, w, h);
+        g.restore();
+        g.filter = "none";
+        g.globalCompositeOperation = "lighter"; // lift the blacks, as a camera does
+        g.fillStyle = "rgb(22,22,26)";
+        g.fillRect(0, 0, 1080, 1920);
+        g.getImageData(0, 0, 1, 1); // rasterize now, not lazily when the camera first shows it
+        shots.push(o.transferToImageBitmap());
+      }
+      const c = document.createElement("canvas");
+      c.width = 1080; c.height = 1920;
+      const g = c.getContext("2d");
+      let i = 0;
+      const draw = () => g.drawImage(shots[i++ % shots.length], 0, 0);
+      draw();
+      setInterval(draw, 100);
+      window.__cameraShot = () => c.toDataURL("image/jpeg", 0.9);
+      const stream = c.captureStream(30);
+      navigator.mediaDevices.getUserMedia = async () => stream;
+      return true;
+    })()`);
+    await sleep(500);
+    writeFileSync(join(OUT, "glare-camera.jpg"), Buffer.from((await page.eval("__cameraShot()")).split(",")[1], "base64"));
+    await page.eval("document.querySelector('#start').click()");
+    // Slow on a busy machine: a software-rendered canvas camera stands in for the phone's.
+    await page.waitFor("document.body.dataset.state === 'done'", 180000);
+    assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), "glare.bin");
+    const { bytes } = await downloadVia(page, browser.cdp);
+    assert.equal(sha256(bytes), sha256(payload3));
   } finally {
     await browser.close();
   }

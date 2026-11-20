@@ -52,7 +52,8 @@ export async function launchBrowser(extraArgs = []) {
       cdp.close();
       proc.kill();
       await sleep(200);
-      rmSync(profile, { recursive: true, force: true });
+      // Chrome can still be writing its profile for a moment after the kill.
+      rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
 }
@@ -115,6 +116,9 @@ export async function openPage(browser, url, { width = 1280, height = 800, mobil
   await s("Page.addScriptToEvaluateOnNewDocument", {
     source: "document.addEventListener('securitypolicyviolation', e => console.error('CSP violation:', e.violatedDirective, e.blockedURI));",
   });
+  // Background tabs get no video frames or animation callbacks: keep this one in front.
+  await s("Page.bringToFront");
+  await s("Emulation.setFocusEmulationEnabled", { enabled: true });
   await s("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile });
   if (mobile) await s("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
 

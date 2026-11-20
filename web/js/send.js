@@ -3,11 +3,11 @@
 // global `Send` and calls back into the global `Report` defined below. This script must
 // load before cimbar_js.*.js, which picks up `window.Module` when it starts.
 (() => {
-  // Code resolution = libcimbar mode: High = B (68, 112x112 cells, default), Medium = Bm (67,
-  // 112x78), Low = Bu (66, 80x69). Lower resolution has bigger symbols, which weaker cameras
-  // read more easily, but carries less per frame. The receiver detects the mode by itself.
+  // Code resolution = libcimbar mode: High = B (68, 112x112 cells), Medium = Bm (67, 112x78),
+  // Low = Bu (66, 80x69, default). Lower resolution has bigger symbols, which phone cameras
+  // read through glare and blur; High needs a very clean capture. The receiver detects the mode.
   const MODES = [68, 67, 66];
-  const DEFAULT_MODE = 68;
+  const DEFAULT_MODE = 66;
   const MODE_KEY = "lumen-send-mode";
   const DEFAULT_FPS = 15;
   const FPS_KEY = "lumen-send-fps";
