@@ -1,0 +1,355 @@
+/* Lumen Drop — one stylesheet for every page. */
+
+@font-face {
+  font-family: "Unbounded";
+  src: url("../fonts/unbounded.woff2") format("woff2");
+  font-weight: 200 900;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Night: the room the light travels through. */
+  --night: #19163a;
+  --panel: #221e4b;
+  --line: #3a3470;
+  --ink: #f3f1ff;
+  --mist: #aaa5d4;
+
+  /* Signal: the cimbar symbol colors. */
+  --cyan: #43e3f2;
+  --yellow: #ffd447;
+  --magenta: #ff62cf;
+  --green: #64f29a;
+
+  --accent: var(--yellow);
+  --display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
+  --text: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Thai", "Noto Sans", sans-serif;
+  --gutter: clamp(16px, 5vw, 48px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--night);
+  color: var(--ink);
+  font: 400 1rem/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Home ---------- */
+
+.home {
+  display: grid;
+  gap: clamp(28px, 6vw, 72px);
+  align-content: start;
+  max-width: 1180px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(var(--gutter), env(safe-area-inset-top)) var(--gutter) max(var(--gutter), env(safe-area-inset-bottom));
+}
+
+@media (min-width: 900px) {
+  .home {
+    grid-template-columns: 1.05fr 1fr;
+    align-content: center;
+    align-items: center;
+  }
+}
+
+/* The hero: a frozen frame of color symbols on a black screen. */
+.plate {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 12), 1fr);
+  gap: clamp(4px, 0.8vw, 8px);
+  padding: clamp(12px, 2vw, 22px);
+  background: #000;
+  border-radius: clamp(14px, 2vw, 22px);
+  box-shadow: 0 0 0 1px var(--line), 0 30px 80px -30px rgb(67 227 242 / 0.35);
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 32%;
+  background: var(--c);
+  opacity: var(--o, 1);
+  animation: transmit 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--d, 0) * 1ms);
+}
+
+.cell--anchor {
+  background: transparent;
+  border: clamp(3px, 0.6vw, 6px) solid #fff;
+  border-radius: 22%;
+}
+
+@keyframes transmit {
+  from {
+    opacity: 0.08;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: var(--o, 1);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell {
+    animation: none;
+  }
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(2.5rem, 8vw, 4.25rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  max-width: 36ch;
+  margin: 18px 0 0;
+  color: var(--mist);
+  font-size: 1.125rem;
+}
+
+.modes {
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.modes li {
+  border-bottom: 1px solid var(--line);
+}
+
+.mode {
+  --tone: var(--yellow);
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 20px 12px;
+  margin: 4px -12px;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: background-color 160ms ease;
+}
+
+.mode--recv {
+  --tone: var(--cyan);
+}
+
+.mode:hover {
+  background: var(--panel);
+}
+
+.mode:focus-visible {
+  outline-color: var(--tone);
+}
+
+.mode__glyph {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--tone);
+  color: var(--night);
+}
+
+.mode__text {
+  display: grid;
+  gap: 2px;
+}
+
+.mode__title {
+  font-family: var(--display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mode__desc {
+  color: var(--mist);
+  font-size: 0.95rem;
+}
+
+.credit {
+  margin: 28px 0 0;
+  color: var(--mist);
+  font-size: 0.875rem;
+}
+
+.credit a:hover {
+  color: var(--ink);
+}
+
+/* ---------- Send / Receive page shell ---------- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 640px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(var(--gutter), env(safe-area-inset-top)) var(--gutter) max(var(--gutter), env(safe-area-inset-bottom));
+}
+
+.page--recv {
+  --accent: var(--cyan);
+}
+
+.back {
+  align-self: flex-start;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--mist);
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  max-width: 44ch;
+  margin: 10px 0 0;
+  color: var(--mist);
+  font-size: 1.05rem;
+}
+
+.panel {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  padding: clamp(20px, 5vw, 32px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+
+.note {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.9rem;
+}
+
+.caution {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--yellow);
+  color: var(--mist);
+  font-size: 0.9rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  font: 600 1rem/1 var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--night);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.btn--ghost:hover {
+  box-shadow: inset 0 0 0 1px var(--mist);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.error {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgb(255 98 207 / 0.12);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgb(255 98 207 / 0.5);
+}
+
+/* Full-viewport stage used while sending or scanning. */
+.is-immersive,
+.is-immersive body {
+  overflow: hidden;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
