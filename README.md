@@ -89,25 +89,34 @@ screen. The receiver already corrects for glare; if it still can't read the code
 
 ## Run it
 
-Requires Go 1.22+.
+Lumen Drop builds into a single program (about 16 MB) with the whole app inside it: no
+other files, no install. Building needs Go 1.22+; running it needs nothing.
 
 ```sh
-go run .            # http://127.0.0.1:8080
+go build -o lumendrop .
+./lumendrop                        # open http://127.0.0.1:8080
+./lumendrop -addr 127.0.0.1:9000   # another port
 ```
 
-Browsers allow the camera on `localhost` without HTTPS. Phones need HTTPS, so test them
-against a deployed copy.
-
-### Build and deploy
-
-The binary embeds the whole site, so deploying is copying one file.
+Build it for another computer by naming its system:
 
 ```sh
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .
+GOOS=windows GOARCH=amd64 go build -o lumendrop.exe .           # Windows
+GOOS=darwin GOARCH=arm64 go build -o lumendrop .                # Mac with Apple silicon
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .   # Linux (static)
 ```
 
-Run it behind [Caddy](https://caddyserver.com/), which gets HTTPS certificates automatically
-([`Caddyfile`](Caddyfile)):
+By default it answers only on this computer (`127.0.0.1`). That is enough to send from it,
+and to receive with its webcam: browsers allow the camera on `localhost` without HTTPS.
+
+**Phones need HTTPS for the camera.** Opening `http://<computer-ip>:8080` from a phone (after
+starting with `-addr 0.0.0.0:8080`) shows the app, but receiving won't start. To use a phone,
+put the program behind HTTPS, as below.
+
+### Deploy with HTTPS
+
+Copy the program to a server and run it behind [Caddy](https://caddyserver.com/), which gets
+HTTPS certificates automatically ([`Caddyfile`](Caddyfile)):
 
 ```caddyfile
 drop.example.com {
