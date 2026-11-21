@@ -13,6 +13,7 @@ for (const [name, opts] of [["phone", { width: 390, height: 844, mobile: true }]
     assert.equal(await page.eval(`document.querySelector('a[href="send.html"]')?.textContent.includes("Send a file")`), true);
     assert.equal(await page.eval(`document.querySelector('a[href="recv.html"]')?.textContent.includes("Receive a file")`), true);
     assert.equal(await page.eval(`!!document.querySelector('a[href="https://github.com/sz3/libcimbar"]')`), true, "libcimbar credit link");
+    assert.equal(await page.eval(`!!document.querySelector('a[href="https://github.com/divan/txqr"]')`), true, "txqr credit link");
     assert.equal(await page.eval(`document.querySelector('link[rel="manifest"]')?.getAttribute("href")`), "manifest.json");
     assert.equal(await page.eval("document.documentElement.scrollWidth <= window.innerWidth"), true, "no horizontal scroll");
     await page.waitFor("navigator.serviceWorker.controller !== null || navigator.serviceWorker.ready.then(() => true)");

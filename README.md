@@ -1,87 +1,113 @@
+<div align="center">
+
+<img src="web/icons/icon.svg" width="88" alt="">
+
 # Lumen Drop
 
-Send a file from one device to another using only a screen and a camera: no internet,
-Bluetooth, or cables. The sending screen plays the file as moving color barcodes; the
-receiving camera reads them and rebuilds the file.
+**Send a file from one screen to another device's camera.**<br>
+No internet, Bluetooth, or cables. Works offline once loaded.
 
-It is a small web app (installable, works offline) with two kinds of code:
+<img src="docs/images/hero.png" alt="Lumen Drop on a laptop and a phone: the home page, with Send a file and Receive a file">
 
-- **Color code** ([libcimbar](https://github.com/sz3/libcimbar) by sz3): the fast default.
-- **QR code** ([txqr](https://github.com/divan/txqr) by divan): plain black-and-white QR codes
-  that almost any camera reads, for files up to 1 MB. Several times slower.
-
-The receiver works out which kind the sender is playing by itself.
+</div>
 
 ## How it works
 
-- **Send:** the file is compressed (zstd), split with fountain codes, and drawn as an
-  animation of [cimbar](https://github.com/sz3/libcimbar) codes with WebGL.
-- **Receive:** camera frames go to a few Web Workers running the libcimbar decoder; the
-  fountain decoder reassembles the file on the device, and you save or share it.
-- **The server only delivers the app.** Files never touch it. After the first visit, a
-  service worker serves everything from the device, so it works with no network at all.
+The sending screen plays your file as a stream of animated codes. The receiving device points
+its camera at the screen, reads the codes, and rebuilds the file. Nothing is uploaded: the file
+travels as light, from one screen to the other camera.
 
-Speed is roughly 100 KB/s (libcimbar's figure; not yet measured with this app). So far, full
-send-to-receive runs are tested with small files (20 KB); the sender has encoded files up to 20 MB.
-In desktop Chromium the encoder runs out of memory somewhere around 30 MB, and the page says so
-instead of failing silently. Limits on phones are not yet measured.
+<p align="center">
+  <img src="docs/images/flow.png" alt="Three phone screens: choosing a file to send, scanning the code with the camera at 30% and 3.0 KB/s, and the received file with a Save file button">
+</p>
+
+<p align="center"><sub>Choose a file, point the other phone's camera at the code, save the file.</sub></p>
+
+```mermaid
+flowchart LR
+  A[File] --> B[Encoder in the browser<br/>WebAssembly]
+  B --> C[Animated codes<br/>on screen]
+  C -. camera .-> D[Decoders in<br/>Web Workers]
+  D --> E[Rebuilt file<br/>Save or Share]
+```
+
+Both sides run entirely in the browser. The server only delivers the app, and a service worker
+keeps it on the device, so after the first visit it works with no network at all.
+
+## Two kinds of code
+
+<p align="center">
+  <img src="docs/images/sending.png" alt="The send screen playing a color code on the left and a black-and-white QR code on the right">
+</p>
+
+|  | Color code (default) | QR code |
+|---|---|---|
+| Built on | [libcimbar](https://github.com/sz3/libcimbar) | [txqr](https://github.com/divan/txqr) |
+| Data per frame | about 3.2 KB at Low, 7.5 KB at High | 200 to 600 bytes |
+| Files | up to about 20 MB | up to 1 MB |
+| Camera | needs a reasonable camera | almost any camera reads it |
+
+The receiver tells which kind is playing by itself; there is nothing to set on that side.
+Both send in fountain-coded frames, so the camera can miss frames or start in the middle.
 
 ## Use it
 
-1. Open the app once on both devices while online (or install it to the home screen).
-2. On the sending device, choose **Send a file** and pick the file. The screen starts flashing codes.
+1. Open the app once on both devices while online, or install it to the home screen.
+2. On the sending device, choose **Send a file**, pick **Color code** or **QR code**, then the file.
 3. On the receiving device, choose **Receive a file**, tap **Start camera**, and point it at the
    sending screen with the whole code in view.
-4. When it reaches 100%, tap **Save file** (or **Share** on phones).
+4. At 100%, tap **Save file** (or **Share** on phones).
 
-Choose **Color code** or **QR code** before picking the file. While the code plays, the bar at
-the top has two more controls. Each is remembered on that device:
+While the code plays, the bar at the top has two controls. Each is remembered on that device:
 
-- **Resolution (Low / Medium / High):** lower resolution draws bigger symbols, which weaker
-  cameras read more easily, but each frame carries less, so the transfer takes more frames
-  (Low carries about 44% of High, Medium about 70%). The receiver follows a change by itself.
-  In QR mode the same buttons choose 200, 400 or 600 bytes per QR code.
+- **Resolution (Low / Medium / High):** lower resolution draws bigger symbols, which phone
+  cameras read more easily, but each frame carries less, so the transfer needs more frames.
+  Low is the default. In QR mode the same buttons choose 200, 400 or 600 bytes per code.
 - **Speed (5 / 8 / 12 / 15 fps):** slower keeps each frame on screen longer.
 
-The code also moves a few pixels every frame. That is libcimbar's design, not a glitch: it
-lets the receiver throw away blurred frames early
+The receiver shows the speed and time left as it goes. The color code also shifts a few pixels
+every frame; that is libcimbar's design, which lets the receiver drop blurred frames early
 ([explanation](https://github.com/sz3/libcimbar/issues/127)).
 
-### If the receiver stays at 0%
+<details>
+<summary><b>If the receiver stays at 0%</b></summary>
 
-The usual cause is the camera blending two consecutive codes into one blurry frame (a slow
-shutter in a dim room, or a slow laptop LCD). Try, in this order:
+<br>
+
+The usual cause is the camera blending two codes into one blurry frame, or glare from a bright
+screen. The receiver already corrects for glare; if it still can't read the code, try:
 
 1. Turn on the room lights and lower the sending screen's brightness a little.
 2. Choose **Low** resolution and **8** (or **5**) fps on the sender.
-3. Open the receiver as `recv.html?camfps=30`, which caps the camera's shutter time.
+3. Switch the sender to **QR code**.
+4. Open the receiver as `recv.html?camfps=30`, which caps the camera's shutter time.
 
-`recv.html#debug` shows what the camera delivers and what the decoder reports, with a
-**Save frame** button for a full-resolution still. `#debug-bitmap` forces the fallback
-capture path for comparison.
+`recv.html#debug` shows what the camera delivers and what each decoder reports, with a
+**Save frame** button for a full-resolution still.
 
-## Run locally
+</details>
+
+## Run it
 
 Requires Go 1.22+.
 
 ```sh
 go run .            # http://127.0.0.1:8080
-go run . -addr 127.0.0.1:9000
 ```
 
-Browsers allow the camera on `localhost`/`127.0.0.1` without HTTPS. To test on a phone,
-you need HTTPS (see deploy below).
+Browsers allow the camera on `localhost` without HTTPS. Phones need HTTPS, so test them
+against a deployed copy.
 
-## Build and deploy
+### Build and deploy
 
-The binary embeds the whole site (`web/`), so deploying is copying one file.
+The binary embeds the whole site, so deploying is copying one file.
 
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .
 ```
 
-Run it behind [Caddy](https://caddyserver.com/), which gets HTTPS certificates
-automatically (phones only allow the camera over HTTPS). See [`Caddyfile`](Caddyfile):
+Run it behind [Caddy](https://caddyserver.com/), which gets HTTPS certificates automatically
+([`Caddyfile`](Caddyfile)):
 
 ```caddyfile
 drop.example.com {
@@ -90,7 +116,8 @@ drop.example.com {
 }
 ```
 
-A systemd unit that runs it as an unprivileged, sandboxed user:
+<details>
+<summary>systemd unit (unprivileged, sandboxed)</summary>
 
 ```ini
 # /etc/systemd/system/lumendrop.service
@@ -111,34 +138,52 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-The server listens on `127.0.0.1` by default so it is reachable only through the proxy.
-Each start generates `sw.js` from a hash of the embedded files. After a deploy, an open
-page reloads itself once the new version has installed, except while a transfer is on screen.
+</details>
+
+The server listens on `127.0.0.1` by default, so it is reachable only through the proxy. Each
+start generates the service worker from a hash of the embedded files: after a deploy, an open
+page reloads itself once the new version is in, unless a transfer is on screen.
 
 ## Security and privacy
 
-- **The codes are not encrypted.** Anyone who can see or film the sending screen can
-  recover the file. Send sensitive files only where no one else can watch the screen.
+- **The codes are not encrypted.** Anyone who can see or film the sending screen can recover
+  the file. Send sensitive files only where no one else can watch the screen.
 - Received files are untrusted. The app never opens them; it only offers Save or Share.
 - Strict Content Security Policy, no third-party requests, no analytics.
 - The send screen flashes colors: not suitable for people with photosensitive epilepsy.
 
-## Tests
+## Status
+
+Tested on a real iPhone (Chrome) with a laptop, in both modes, and end to end in headless
+Chromium, including a simulated phone camera with glare and blur. Full transfers so far use
+small files; the encoder alone has handled 20 MB. In desktop Chromium the color
+code encoder runs out of memory somewhere around 30 MB; the page says so instead of failing.
+Limits on phones are not yet measured.
+
+## Development
 
 ```sh
-go test ./...                                     # server, headers, service worker
-(cd qr && go test ./...)                          # QR codec: QR round trips, fountain coverage, bad frames
-node --test --test-concurrency=1 test/browser/    # pages in headless Chromium (Node 22+, chromium on PATH)
+go test ./...                                     # server: headers, MIME types, service worker
+(cd qr && go test ./...)                          # QR codec: round trips through real QR images
+node --test --test-concurrency=1 test/browser/    # the app in headless Chromium (Node 22+)
+qr/build.sh                                       # rebuild web/vendor/qr/qr.wasm after changing qr/
 ```
 
-The browser tests record the send page's barcode, feed it to the receive page as a fake
-camera, and check the saved file byte for byte. They also check offline use and error states.
+The browser tests record the send screen, play it to the receive page as a fake camera, and
+compare the saved file byte for byte. They also cover offline use, updates, and error states.
+
+```
+main.go, server.go, sw.go   Go server: embeds web/, security headers, service worker
+web/                        the app; libcimbar and QR WebAssembly builds in web/vendor/
+qr/                         QR codec (txqr) compiled to WebAssembly
+test/browser/               end-to-end tests over the Chrome DevTools Protocol
+```
 
 ## Credits
 
-- [libcimbar](https://github.com/sz3/libcimbar) by sz3: the encoder and decoder (MPL-2.0).
-  Its WASM build includes OpenCV, zstd, wirehair, libcorrect and others; their licenses are in
-  [`web/vendor/cimbar/third_party/`](web/vendor/cimbar/third_party/).
+- [libcimbar](https://github.com/sz3/libcimbar) by sz3: the color code encoder and decoder
+  (MPL-2.0). Its WebAssembly build includes OpenCV, zstd, wirehair, libcorrect and others; their
+  licenses are in [`web/vendor/cimbar/third_party/`](web/vendor/cimbar/third_party/).
 - [txqr](https://github.com/divan/txqr) by divan: the QR code protocol (MIT), built to
   WebAssembly with go-qrcode, gozxing and gofountain; see [`web/vendor/qr/`](web/vendor/qr/).
 - [Unbounded](https://github.com/googlefonts/unbounded) typeface (SIL OFL 1.1).
@@ -146,6 +191,6 @@ camera, and check the saved file byte for byte. They also check offline use and 
 ## License
 
 Lumen Drop's own code is [MIT](LICENSE). Bundled files keep their licenses:
-`web/vendor/cimbar/` is MPL-2.0 (unmodified libcimbar release files; see its
-[README](web/vendor/cimbar/README.md) for the source and how to upgrade), `web/vendor/qr/` lists
-the licenses of what `qr.wasm` contains, and `web/fonts/` is OFL-1.1.
+[`web/vendor/cimbar/`](web/vendor/cimbar/README.md) is MPL-2.0 (unmodified libcimbar release
+files), [`web/vendor/qr/`](web/vendor/qr/README.md) lists the licenses of what `qr.wasm`
+contains, and `web/fonts/` is OFL-1.1.
