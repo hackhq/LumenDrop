@@ -1,6 +1,7 @@
 # build output
 /lumendrop
 /lumendrop-*
+/lumendrop.exe
 /dist/
 
 # local scratch / tooling
