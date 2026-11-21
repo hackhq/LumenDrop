@@ -24,7 +24,7 @@ test("every page works offline after the first visit", async () => {
     assert.equal(await page.eval("fetch('/sw.js', { cache: 'no-store' }).then(() => 'up', () => 'down')"), "down", "server should be gone");
 
     await page.goto(server.base);
-    assert.equal(await page.eval("document.title"), "Lumen Drop");
+    assert.equal(await page.eval("document.title"), "LumenDrop");
     assert.equal(await page.eval("getComputedStyle(document.querySelector('.wordmark')).fontFamily.includes('Unbounded')"), true);
 
     await page.goto(server.base + "send.html");

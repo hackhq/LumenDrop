@@ -9,7 +9,7 @@ after(async () => { await browser?.close(); server?.stop(); });
 for (const [name, opts] of [["phone", { width: 390, height: 844, mobile: true }], ["desktop", { width: 1440, height: 900 }]]) {
   test(`home page on ${name}: two modes, credit, no errors`, async () => {
     const page = await openPage(browser, server.base, opts);
-    assert.equal(await page.eval("document.title"), "Lumen Drop");
+    assert.equal(await page.eval("document.title"), "LumenDrop");
     assert.equal(await page.eval(`document.querySelector('a[href="send.html"]')?.textContent.includes("Send a file")`), true);
     assert.equal(await page.eval(`document.querySelector('a[href="recv.html"]')?.textContent.includes("Receive a file")`), true);
     assert.equal(await page.eval(`!!document.querySelector('a[href="https://github.com/sz3/libcimbar"]')`), true, "libcimbar credit link");
@@ -27,7 +27,7 @@ for (const [name, opts] of [["phone", { width: 390, height: 844, mobile: true }]
 
 test("manifest is valid and its icons exist", async () => {
   const m = await (await fetch(server.base + "manifest.json")).json();
-  assert.equal(m.name, "Lumen Drop");
+  assert.equal(m.name, "LumenDrop");
   assert.equal(m.start_url, "./");
   assert.ok(m.icons.some((i) => i.sizes === "512x512" && i.purpose === "maskable"));
   for (const icon of m.icons) {

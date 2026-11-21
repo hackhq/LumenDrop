@@ -1,6 +1,6 @@
 {
-  "name": "Lumen Drop",
-  "short_name": "Lumen Drop",
+  "name": "LumenDrop",
+  "short_name": "LumenDrop",
   "description": "Send a file from one screen to another device's camera. No internet, Bluetooth, or cables.",
   "lang": "en",
   "start_url": "./",

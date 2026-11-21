@@ -2,12 +2,12 @@
 
 <img src="web/icons/icon.svg" width="88" alt="">
 
-# Lumen Drop
+# LumenDrop
 
 **Send a file from one screen to another device's camera.**<br>
 No internet, Bluetooth, or cables. Works offline once loaded.
 
-<img src="docs/images/hero.png" alt="Lumen Drop on a laptop and a phone: the home page, with Send a file and Receive a file">
+<img src="docs/images/hero.png" alt="LumenDrop on a laptop and a phone: the home page, with Send a file and Receive a file">
 
 </div>
 
@@ -89,7 +89,7 @@ screen. The receiver already corrects for glare; if it still can't read the code
 
 ## Run it
 
-Lumen Drop builds into a single program (about 16 MB) with the whole app inside it: no
+LumenDrop builds into a single program (about 16 MB) with the whole app inside it: no
 other files, no install. Building needs Go 1.22+; running it needs nothing.
 
 ```sh
@@ -131,7 +131,7 @@ drop.example.com {
 ```ini
 # /etc/systemd/system/lumendrop.service
 [Unit]
-Description=Lumen Drop
+Description=LumenDrop
 After=network.target
 
 [Service]
@@ -199,7 +199,7 @@ test/browser/               end-to-end tests over the Chrome DevTools Protocol
 
 ## License
 
-Lumen Drop's own code is [MIT](LICENSE). Bundled files keep their licenses:
+LumenDrop's own code is [MIT](LICENSE). Bundled files keep their licenses:
 [`web/vendor/cimbar/`](web/vendor/cimbar/README.md) is MPL-2.0 (unmodified libcimbar release
 files), [`web/vendor/qr/`](web/vendor/qr/README.md) lists the licenses of what `qr.wasm`
 contains, and `web/fonts/` is OFL-1.1.

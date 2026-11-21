@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Lumen Drop moves a file between devices via screen → camera only, using [libcimbar](https://github.com/sz3/libcimbar) color barcodes. Two modes: Send (`web/send.html`) and Receive (`web/recv.html`). A Go binary embeds the static site; Caddy terminates HTTPS in deployment. `PLAN.md` holds scope and milestones; `docs/superpowers/specs/` holds the approved design.
+LumenDrop moves a file between devices via screen → camera only, using [libcimbar](https://github.com/sz3/libcimbar) color barcodes. Two modes: Send (`web/send.html`) and Receive (`web/recv.html`). A Go binary embeds the static site; Caddy terminates HTTPS in deployment. `PLAN.md` holds scope and milestones; `docs/superpowers/specs/` holds the approved design.
 
 ## Commands
 

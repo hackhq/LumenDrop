@@ -1,4 +1,4 @@
-// Command lumendrop serves the Lumen Drop web app from a single binary.
+// Command lumendrop serves the LumenDrop web app from a single binary.
 // Put it behind a TLS-terminating proxy such as Caddy: browsers only allow
 // camera access over HTTPS (or on localhost).
 package main
@@ -38,6 +38,6 @@ func main() {
 		WriteTimeout:      2 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 	}
-	log.Printf("Lumen Drop listening on http://%s", *addr)
+	log.Printf("LumenDrop listening on http://%s", *addr)
 	log.Fatal(srv.ListenAndServe())
 }

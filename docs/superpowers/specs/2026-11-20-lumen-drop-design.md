@@ -1,4 +1,4 @@
-# Lumen Drop — Design (2026-11-20)
+# LumenDrop — Design (2026-11-20)
 
 ## Intent
 A simple, good-looking web app to move a file between two devices using only a screen and a camera, built on libcimbar. Two modes: **Send** and **Receive**. Code stays small and plain; the UI is modern. Works offline after the first visit (PWA).
@@ -49,7 +49,7 @@ LICENSE (MIT), README.md
 - Barcodes are not encrypted: anyone who can film the sender's screen can recover the file (documented).
 
 ## Licensing
-- Our code: MIT (`Copyright (c) 2026 Lumen Drop contributors`).
+- Our code: MIT (`Copyright (c) 2026 LumenDrop contributors`).
 - `web/vendor/cimbar/`: MPL-2.0 (libcimbar) + bundled third-party licenses (zstd, wirehair, OpenCV, libcorrect, base91, fmt, stb, …). Our JS does not copy upstream web code.
 
 ## Verification

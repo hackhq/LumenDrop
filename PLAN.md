@@ -1,4 +1,4 @@
-# Lumen Drop — Plan
+# LumenDrop — Plan
 
 Web app for sending and receiving files through the screen and the camera (no internet, Bluetooth, or cables), built on [libcimbar](https://github.com/sz3/libcimbar).
 - Static front end in one Go binary (embeds the site); no server-side processing, files never touch the server

@@ -72,7 +72,7 @@
     errorBox.hidden = true;
     UI.$("#name").textContent = file.name;
     UI.$("#size").textContent = UI.formatBytes(file.size);
-    document.title = `Sending ${file.name} - Lumen Drop`;
+    document.title = `Sending ${file.name} - LumenDrop`;
 
     stage.hidden = false;
     stage.classList.toggle("is-qr", format === "qr");
@@ -93,7 +93,7 @@
     const result = await QRSend.start(file, QR_CHUNKS[currentMode]);
     if (currentFile !== file || document.body.dataset.state !== "playing") return; // stopped meanwhile
     if (result.error) {
-      showError(`Lumen Drop couldn't prepare the QR codes (${result.error}).`);
+      showError(`LumenDrop couldn't prepare the QR codes (${result.error}).`);
       return;
     }
     stage.classList.remove("is-preparing");
@@ -139,7 +139,7 @@
     }
     if (document.body.dataset.state !== "playing") return; // stopped meanwhile
     if (outcome === 0) stage.classList.remove("is-preparing");
-    else showError(`Lumen Drop couldn't prepare this file for sending (error ${outcome}). Try a smaller file, or reload the page.`);
+    else showError(`LumenDrop couldn't prepare this file for sending (error ${outcome}). Try a smaller file, or reload the page.`);
   }
 
   function stop() {

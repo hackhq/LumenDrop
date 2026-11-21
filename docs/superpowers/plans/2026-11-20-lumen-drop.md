@@ -1,4 +1,4 @@
-# Lumen Drop Implementation Plan
+# LumenDrop Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -88,7 +88,7 @@
 
 ### Task 6: Offline, deploy files, docs
 
-**Files:** Create `LICENSE` (MIT, "Lumen Drop contributors"), `README.md`, `Caddyfile`; modify `PLAN.md`, `CLAUDE.md`.
+**Files:** Create `LICENSE` (MIT, "LumenDrop contributors"), `README.md`, `Caddyfile`; modify `PLAN.md`, `CLAUDE.md`.
 
 - [ ] **Step 1:** README: what it is, `go run .`, build `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .`, Caddyfile, non-root systemd unit, security note (barcodes not encrypted), Credits + license split.
 - [ ] **Step 2: Verify offline:** load `/`, `/send.html`, `/recv.html` once; kill server; reload each → renders, WASM loads (send shows barcode for a file).

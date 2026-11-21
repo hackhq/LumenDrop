@@ -50,7 +50,7 @@ func Pack(name string, data []byte) []byte {
 // Unpack reverses Pack, rejecting anything malformed.
 func Unpack(b []byte) (name string, data []byte, err error) {
 	if len(b) < len(magic)+2 || string(b[:len(magic)]) != magic {
-		return "", nil, errors.New("not a Lumen Drop QR container")
+		return "", nil, errors.New("not a LumenDrop QR container")
 	}
 	n := int(binary.BigEndian.Uint16(b[len(magic):]))
 	rest := b[len(magic)+2:]

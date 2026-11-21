@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Lumen Drop contributors
+Copyright (c) 2026 LumenDrop contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,6 @@ SOFTWARE.
 
 ---
 
-This license covers the Lumen Drop code. Bundled third-party files keep their own
+This license covers the LumenDrop code. Bundled third-party files keep their own
 licenses: web/vendor/cimbar/ (libcimbar, MPL-2.0, plus the licenses in
 web/vendor/cimbar/third_party/) and web/fonts/ (Unbounded, SIL OFL 1.1).

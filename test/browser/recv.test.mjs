@@ -67,7 +67,7 @@ test("receive page decodes the sender's barcode and saves the exact file", async
   ]);
   try {
     const page = await openPage(browser, server.base + "recv.html", { width: 390, height: 844, mobile: true });
-    assert.equal(await page.eval("document.title"), "Receive a file - Lumen Drop");
+    assert.equal(await page.eval("document.title"), "Receive a file - LumenDrop");
     await page.waitFor(ready, 20000);
     await page.eval("document.querySelector('#start').click()");
     await page.waitFor("document.body.dataset.state === 'scanning'");

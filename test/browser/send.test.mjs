@@ -39,7 +39,7 @@ async function canvasRect(page) {
 
 test("send page loads the encoder and offers a file picker", async () => {
   const page = await openPage(browser, server.base + "send.html");
-  assert.equal(await page.eval("document.title"), "Send a file - Lumen Drop");
+  assert.equal(await page.eval("document.title"), "Send a file - LumenDrop");
   assert.equal(await page.eval("document.querySelector('h1').textContent"), "Send a file");
   assert.equal(await page.eval("document.querySelector('a.back').getAttribute('href')"), "./");
   await page.waitFor(ready, 20000);
