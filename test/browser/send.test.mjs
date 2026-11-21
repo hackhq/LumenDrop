@@ -294,3 +294,45 @@ test("changing resolution while playing doesn't force fullscreen again", async (
   await page.eval("localStorage.clear(), true");
   await page.close();
 });
+
+// ---- QR code format ----
+
+test("QR code format plays a black-and-white QR code instead of the color code", async () => {
+  const page = await openPage(browser, server.base + "send.html");
+  await page.eval("localStorage.clear(), true");
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  await page.eval("document.querySelector('[data-format=\"qr\"]').click()");
+  assert.equal(await page.eval("document.querySelector('[data-format=\"qr\"]').getAttribute('aria-pressed')"), "true");
+  await page.setFiles("#file", [small]);
+  await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')", 30000);
+  await page.waitFor("Number(document.querySelector('#qr-canvas').dataset.frame) >= 2", 10000);
+  assert.equal(await page.eval("getComputedStyle(document.querySelector('#canvas')).display"), "none", "color code hidden");
+  const r = await page.eval(`(() => { const b = document.querySelector('#qr-canvas').getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, vw: innerWidth, vh: innerHeight }; })()`);
+  assert.ok(r.w > 200 && Math.abs(r.w - r.h) < 2, `QR canvas ${JSON.stringify(r)}`);
+  assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= r.vw && r.y + r.h <= r.vh, "fully on screen");
+  const shot = decodePNG(await page.capture());
+  assert.ok(colorfulFraction(shot, r) < 0.01, "QR code is black and white");
+  await page.screenshot("send-qr.png");
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  assert.equal(await page.eval("document.querySelector('[data-format=\"qr\"]').getAttribute('aria-pressed')"), "true", "format remembered");
+  await page.eval("localStorage.clear(), true");
+  assert.deepEqual(page.log.errors, []);
+  await page.close();
+});
+
+test("QR code format explains its 1 MB limit instead of playing a bigger file", async () => {
+  const big = join(FIX, "over-1mb.bin");
+  writeFileSync(big, randomBytes(1024 * 1024 + 1));
+  const page = await openPage(browser, server.base + "send.html");
+  await page.eval("localStorage.setItem('lumen-send-format', 'qr'), true");
+  await page.goto(server.base + "send.html");
+  await page.waitFor(ready, 20000);
+  await page.setFiles("#file", [big]);
+  await page.waitFor("document.body.dataset.state === 'error'", 20000);
+  assert.equal(await page.eval("document.querySelector('#stage').hidden"), true);
+  assert.match(await page.eval("document.querySelector('#error').textContent"), /1 MB/);
+  await page.eval("localStorage.clear(), true");
+  await page.close();
+});

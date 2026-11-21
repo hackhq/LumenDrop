@@ -11,6 +11,8 @@ Lumen Drop moves a file between devices via screen → camera only, using [libci
 ```sh
 go run .                                          # serve on 127.0.0.1:8080 (camera works on localhost)
 go test ./...                                     # Go: headers, MIME, generated service worker
+(cd qr && go test ./...)                          # QR codec (separate module): round trips through real QR images
+qr/build.sh                                       # rebuild web/vendor/qr/qr.wasm after changing qr/ (commit the output)
 node --test --test-concurrency=1 test/browser/    # all browser tests (headless chromium on PATH, Node 22+)
 node --test --test-concurrency=1 --test-name-pattern="Stop returns" test/browser/send.test.mjs   # one test
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lumendrop .                                    # deploy binary
@@ -25,6 +27,12 @@ Browser tests build the binary, start it on a fixed port per file, and drive Chr
 - **Send** (`js/send.js`): defines `window.Report` (callbacks the vendored `Send` driver calls) and `window.Module` (must exist before the `cimbar_js` script tag runs). Mode B (68) is fixed; `fit()` sizes the canvas to the code's aspect ratio inside the stage.
 - **Receive** (`js/recv.js`): camera frames (`VideoFrame` NV12/I420, else `createImageBitmap`) are round-robined to 3–6 upstream `recv-worker`s; the main-thread `Module` locks the mode on the first successful frame, runs the fountain decoder, then streams `_cimbard_decompress_read` into a Blob offered via Save/Share.
 - **Shared** (`js/ui.js`): global `UI` (state via `body[data-state]`, wake lock, fullscreen overlay, SW registration). Pages show/hide sections with CSS keyed on `body[data-state]`.
+
+## QR code mode (txqr)
+
+- `qr/` is its own Go module so the server stays dependency-free. `qr/txqr/` holds txqr's protocol files unmodified (upstream go.mod pins a module that no longer exists). `qr/codec` adds a container with the file name (`LDQ1` + name), base64 (as txqr's tools do), QR rendering (go-qrcode, ECC M) and scanning (gozxing, ISO-8859-1 so XORed fountain bytes pass through unchanged; hybrid then global binarizer). `qr/cmd/wasm` exports `LumenQR`; every export recovers panics. Limits: 1 MiB files, header bounds checked before allocating.
+- Send: `js/qr-send.js` loads the runtime on first use and draws frames on `#qr-canvas` (2D, integer pixels per module, 4-module quiet zone); the cimbar loop isn't started. Resolution Low/Medium/High = 200/400/600 bytes per QR (measured in `qr/codec/sweep_test.go`, `SWEEP=1`).
+- Receive: `js/qr-recv.js` + `js/qr-worker.js`. While `format` is unknown every 3rd frame (own counter) goes to the QR worker at half resolution; a valid txqr frame locks `format = "qr"` (full resolution, cimbar workers idle), cimbar data locks `"color"`; 3 s without data unlocks. Replies carry a generation id so frames from before a reset are ignored.
 
 ## libcimbar quirks (v0.6.9)
 

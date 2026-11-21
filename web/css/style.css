@@ -638,3 +638,61 @@ body[data-state="error"] [data-show~="error"] {
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* Code type choice on the send page. */
+.format {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.format__option {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.format__option:hover {
+  box-shadow: inset 0 0 0 1px var(--mist);
+}
+
+.format__option[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--yellow);
+}
+
+.format__title {
+  font: 600 1rem/1.2 var(--text);
+}
+
+.format__desc {
+  color: var(--mist);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+/* QR mode shows a plain 2D canvas instead of libcimbar's WebGL one. */
+#qr-canvas {
+  display: none;
+  image-rendering: pixelated;
+}
+
+.stage.is-qr #canvas {
+  display: none;
+}
+
+.stage.is-qr #qr-canvas {
+  display: block;
+}
+
+.stage.is-preparing #qr-canvas {
+  visibility: hidden;
+}

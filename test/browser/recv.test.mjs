@@ -216,6 +216,11 @@ test("recv.html#debug shows live decoder diagnostics", async () => {
     assert.match(text, /frame (VideoFrame|bitmap)/);
     assert.match(text, /video \d+x\d+/);
     assert.match(text, /posted \d+/);
+    await page.waitFor("/scanned at \\d+x\\d+/.test(document.querySelector('#debug').textContent)", 10000);
+    assert.match(await page.eval("document.querySelector('#debug').textContent"), /scanned at (\d+)x(\d+)/);
+    const [, sw] = (await page.eval("document.querySelector('#debug').textContent")).match(/scanned at (\d+)x/);
+    const vw = await page.eval("document.querySelector('#video').videoWidth");
+    assert.equal(Number(sw), Math.floor(vw / 2), "half resolution while detecting");
     assert.match(text, /pixels luma min \d+ max \d+ mean \d+/);
     assert.equal(await page.eval("document.querySelector('#debug').hidden"), false);
   } finally {
@@ -395,6 +400,53 @@ async function recordSender(file, mode, count) {
   }
 }
 
+
+// Feeds the page a portrait 1080x1920 "phone camera" built from screenshots: the code slightly
+// tilted and blurred, blacks lifted, and glare from bright areas spilling into the dark.
+async function glareCamera(page, frames) {
+  await page.eval(`(async () => {
+    const list = ${JSON.stringify(frames)};
+    const bitmaps = await Promise.all(list.map((b64) =>
+      createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
+    // Render each degraded camera frame once (software rendering of the filters is slow),
+    // then play them back like a camera.
+    const shots = [];
+    for (const f of bitmaps) {
+      const o = new OffscreenCanvas(1080, 1920);
+      const g = o.getContext("2d");
+      const w = 1040, h = Math.round(f.height * 1040 / f.width);
+      g.fillStyle = "rgb(30,30,34)";
+      g.fillRect(0, 0, 1080, 1920);
+      g.save();
+      g.translate(540, 480 + h / 2);
+      g.rotate(0.03);
+      g.filter = "blur(1.2px) brightness(1.2)";
+      g.drawImage(f, -w / 2, -h / 2, w, h);
+      g.globalCompositeOperation = "lighter";
+      g.filter = "brightness(0.62) contrast(12) blur(7px) brightness(0.6)";
+      g.drawImage(f, -w / 2, -h / 2, w, h);
+      g.restore();
+      g.filter = "none";
+      g.globalCompositeOperation = "lighter"; // lift the blacks, as a camera does
+      g.fillStyle = "rgb(22,22,26)";
+      g.fillRect(0, 0, 1080, 1920);
+      g.getImageData(0, 0, 1, 1); // rasterize now, not lazily when the camera first shows it
+      shots.push(o.transferToImageBitmap());
+    }
+    const c = document.createElement("canvas");
+    c.width = 1080; c.height = 1920;
+    const g = c.getContext("2d");
+    let i = 0;
+    const draw = () => g.drawImage(shots[i++ % shots.length], 0, 0);
+    draw();
+    setInterval(draw, 100);
+    window.__cameraShot = () => c.toDataURL("image/jpeg", 0.9);
+    const stream = c.captureStream(30);
+    navigator.mediaDevices.getUserMedia = async () => stream;
+    return true;
+  })()`);
+}
+
 test("decodes through phone-camera glare (bright screen blooming over the code)", async () => {
   // Small enough that the 32 looped camera frames hold every block it needs (a real sender
   // keeps producing new frames, so size isn't limited by this in practice).
@@ -407,49 +459,7 @@ test("decodes through phone-camera glare (bright screen blooming over the code)"
   try {
     const page = await openPage(browser, server.base + "recv.html#debug");
     await page.waitFor(ready, 20000);
-    // A portrait 1080x1920 "phone camera": the code slightly tilted and blurred, blacks lifted,
-    // and glare from bright areas spilling into the dark around them.
-    await page.eval(`(async () => {
-      const list = ${JSON.stringify(frames)};
-      const bitmaps = await Promise.all(list.map((b64) =>
-        createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
-      // Render each degraded camera frame once (software rendering of the filters is slow),
-      // then play them back like a camera.
-      const shots = [];
-      for (const f of bitmaps) {
-        const o = new OffscreenCanvas(1080, 1920);
-        const g = o.getContext("2d");
-        const w = 1040, h = Math.round(f.height * 1040 / f.width);
-        g.fillStyle = "rgb(30,30,34)";
-        g.fillRect(0, 0, 1080, 1920);
-        g.save();
-        g.translate(540, 480 + h / 2);
-        g.rotate(0.03);
-        g.filter = "blur(1.2px) brightness(1.2)";
-        g.drawImage(f, -w / 2, -h / 2, w, h);
-        g.globalCompositeOperation = "lighter";
-        g.filter = "brightness(0.62) contrast(12) blur(7px) brightness(0.6)";
-        g.drawImage(f, -w / 2, -h / 2, w, h);
-        g.restore();
-        g.filter = "none";
-        g.globalCompositeOperation = "lighter"; // lift the blacks, as a camera does
-        g.fillStyle = "rgb(22,22,26)";
-        g.fillRect(0, 0, 1080, 1920);
-        g.getImageData(0, 0, 1, 1); // rasterize now, not lazily when the camera first shows it
-        shots.push(o.transferToImageBitmap());
-      }
-      const c = document.createElement("canvas");
-      c.width = 1080; c.height = 1920;
-      const g = c.getContext("2d");
-      let i = 0;
-      const draw = () => g.drawImage(shots[i++ % shots.length], 0, 0);
-      draw();
-      setInterval(draw, 100);
-      window.__cameraShot = () => c.toDataURL("image/jpeg", 0.9);
-      const stream = c.captureStream(30);
-      navigator.mediaDevices.getUserMedia = async () => stream;
-      return true;
-    })()`);
+    await glareCamera(page, frames);
     await sleep(500);
     writeFileSync(join(OUT, "glare-camera.jpg"), Buffer.from((await page.eval("__cameraShot()")).split(",")[1], "base64"));
     await page.eval("document.querySelector('#start').click()");
@@ -500,3 +510,77 @@ test("shows an estimated speed and time left while receiving, and a summary when
     await browser.close();
   }
 });
+
+// Records `count` distinct QR frames from the sender in QR mode as base64 JPEGs.
+async function recordQRSender(file, mode, count) {
+  const sender = await launchBrowser();
+  try {
+    const page = await openPage(sender, server.base + "send.html", { width: 1280, height: 900 });
+    await page.eval(`(localStorage.setItem("lumen-send-format", "qr"), localStorage.setItem("lumen-send-mode", "${mode}"), true)`);
+    await page.goto(server.base + "send.html?fps=4");
+    await page.waitFor("!document.querySelector('#choose').disabled", 20000);
+    await page.setFiles("#file", [file]);
+    await page.waitFor("document.body.dataset.state === 'playing' && !document.querySelector('#stage').classList.contains('is-preparing')", 30000);
+    const frames = [];
+    let last = await page.eval("document.querySelector('#qr-canvas').dataset.frame");
+    while (frames.length < count) {
+      const f = await page.eval("document.querySelector('#qr-canvas').dataset.frame");
+      if (f !== last) {
+        await sleep(60);
+        frames.push((await page.capture("jpeg", 90)).toString("base64"));
+        last = f;
+      }
+      await sleep(25);
+    }
+    await page.eval("localStorage.clear(), true");
+    return frames;
+  } finally {
+    await sender.close();
+  }
+}
+
+// Plays recorded frames as the camera, as they were captured.
+async function plainCamera(page, frames) {
+  await page.eval(`(async () => {
+    const shots = await Promise.all(${JSON.stringify(frames)}.map((b64) =>
+      createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "image/jpeg" }))));
+    const c = document.createElement("canvas");
+    c.width = shots[0].width; c.height = shots[0].height;
+    const g = c.getContext("2d");
+    let i = 0;
+    const draw = () => g.drawImage(shots[i++ % shots.length], 0, 0);
+    draw();
+    setInterval(draw, 150);
+    navigator.mediaDevices.getUserMedia = async () => c.captureStream(30);
+    return true;
+  })()`);
+}
+
+for (const [label, camera] of [["", plainCamera], [" through glare", glareCamera]]) {
+  test(`receives a file sent as QR codes${label}, detecting the format by itself`, async () => {
+    // 1000 bytes = 7 chunks of 200; the sender plays 14 frames, all inside the 16 recorded.
+    const payload5 = randomBytes(1000);
+    const name = "<img src=x onerror=1> ไฟล์ QR.bin";
+    const src = join(FIX, name);
+    writeFileSync(src, payload5);
+    const frames = await recordQRSender(src, 66, 16);
+    const browser = await launchBrowser();
+    try {
+      const page = await openPage(browser, server.base + "recv.html#debug");
+      await page.waitFor(ready, 20000);
+      await camera(page, frames);
+      await page.eval("document.querySelector('#start').click()");
+      await page.waitFor("document.body.dataset.state === 'done'", 120000);
+      assert.equal(await page.eval("document.querySelector('#recv-name').textContent"), name);
+      const dbg = await page.eval("document.querySelector('#debug').textContent");
+      assert.match(dbg, /format qr/);
+      const [, vw, vh] = dbg.match(/video (\d+)x(\d+)/);
+      assert.ok(dbg.includes(`scanned at ${vw}x${vh}`), "full resolution once QR is locked");
+      const { bytes } = await downloadVia(page, browser.cdp);
+      assert.equal(sha256(bytes), sha256(payload5));
+      assert.deepEqual(page.log.errors, []);
+    } finally {
+      await browser.close();
+    }
+  });
+}

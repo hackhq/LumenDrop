@@ -16,6 +16,9 @@
     return lut;
   });
   const PIXEL_FORMATS = ["NV12", "I420"]; // VideoFrame formats the decoder reads directly
+  // The sender may play libcimbar color codes or txqr QR codes (js/qr-recv.js). Until one
+  // of them yields data, every QR_EVERY-th frame also goes to the QR decoder.
+  const QR_EVERY = 3;
   const MAX_IN_FLIGHT = 30;
   const RING = 2 * Math.PI * 26;
 
@@ -43,6 +46,8 @@
   let lastBytesAt = 0;    // time of the last data; a locked mode with none for a while is released
   const RELOCK_MS = 3000;
   let progress = 0;
+  let format = null;      // null while detecting, then "color" or "qr"
+  let qrTick = 0;         // its own counter: tying it to `frames` would correlate with modes
   let mode = 0;
   let fountain = null;    // {ptr, size} in the WASM heap
   let scratch = null;     // {ptr, size} for report and file name strings
@@ -164,6 +169,9 @@
     }
     frames = 0;
     preferredLevel = null;
+    format = null;
+    qrTick = 0;
+    QRRecv.reset();
     fileSize = 0;
     firstDataAt = 0;
     rateSamples = [];
@@ -223,13 +231,15 @@
     frames++;
     // The sender may have switched symbol size: if the locked mode has gone quiet, detect
     // again. The same mode re-locks without losing progress (libcimbar keeps its sink).
-    if (mode && performance.now() - lastBytesAt > RELOCK_MS) {
+    if ((mode || format) && performance.now() - lastBytesAt > RELOCK_MS) {
       mode = 0;
+      format = null;
       preferredLevel = null; // the scene may have changed too
     }
     try {
+      if (format === "qr" || (format === null && ++qrTick % QR_EVERY === 0)) QRRecv.offer(video, format === "qr");
       // Start as soon as one decoder is up; slower ones join when they finish loading.
-      if (readyWorkers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
+      if (format !== "qr" && readyWorkers.length && inFlight < MAX_IN_FLIGHT && video.videoWidth) {
         const level = pickLevel();
         const frameMode = mode || MODES[Math.floor(frames / BLACK_POINTS.length) % MODES.length];
         const msg = await grab(frameMode, level);
@@ -353,6 +363,7 @@
       `video ${video.videoWidth}x${video.videoHeight}  workers ${workersReady}/${workers.length}  mode ${mode || "auto"}  black point ${preferredLevel === null ? "cycling" : BLACK_POINTS[preferredLevel]}`,
       `frames ${frames}  posted ${stats.posted}  in flight ${inFlight}`,
       `replies: data ${stats.bytes}  code found ${stats.found}  no code ${stats.missed}  errors ${stats.errors}`,
+      `format ${format || "auto"}  qr ${QRRecv.ready ? "ready" : "loading"}: sent ${QRRecv.stats.sent}  found ${QRRecv.stats.found}  valid ${QRRecv.stats.valid}  scan ${QRRecv.stats.scanMs.toFixed(0)} ms  scanned at ${QRRecv.stats.size || "-"}  blocks ${QRRecv.stats.blocks}/${QRRecv.stats.chunks}`,
       `last: ${stats.last || "-"}`,
       navigator.userAgent,
     ].join("\n");
@@ -392,6 +403,7 @@
       }
       lastSeen = lastBytes = frames;
       lastBytesAt = performance.now();
+      format = "color";
       if (level !== undefined) preferredLevel = level;
       feed(data.buff, data.mode);
     } else if (data.nodata) {
@@ -544,6 +556,30 @@
       fail("The decoder failed to start. Reload the page to try again.");
     },
   };
+
+  QRRecv.init({
+    status(st) {
+      if (!running) return;
+      if (st.valid) {
+        format = "qr";
+        lastSeen = lastBytes = frames;
+        lastBytesAt = performance.now();
+        setProgress(st.progress);
+        fileSize = Math.round((st.total * 3) / 4); // QR frames carry the file as base64
+        trackRate(progress);
+      } else if (st.found) {
+        lastSeen = frames;
+      }
+    },
+    result(name, data) {
+      if (!running) return;
+      stopCamera();
+      showResult(name, new Blob([data], { type: "application/octet-stream" }));
+    },
+    failed() {
+      // QR receiving is unavailable; color codes still work.
+    },
+  });
 
   UI.$("#ring").setAttribute("stroke-dasharray", String(RING));
   setProgress(0);

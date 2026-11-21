@@ -4,8 +4,13 @@ Send a file from one device to another using only a screen and a camera: no inte
 Bluetooth, or cables. The sending screen plays the file as moving color barcodes; the
 receiving camera reads them and rebuilds the file.
 
-It is a small web app (installable, works offline) built on
-[libcimbar](https://github.com/sz3/libcimbar) by sz3, which does all the encoding and decoding.
+It is a small web app (installable, works offline) with two kinds of code:
+
+- **Color code** ([libcimbar](https://github.com/sz3/libcimbar) by sz3): the fast default.
+- **QR code** ([txqr](https://github.com/divan/txqr) by divan): plain black-and-white QR codes
+  that almost any camera reads, for files up to 1 MB. Several times slower.
+
+The receiver works out which kind the sender is playing by itself.
 
 ## How it works
 
@@ -29,11 +34,13 @@ instead of failing silently. Limits on phones are not yet measured.
    sending screen with the whole code in view.
 4. When it reaches 100%, tap **Save file** (or **Share** on phones).
 
-While the code plays, the bar at the top has two controls. Each is remembered on that device:
+Choose **Color code** or **QR code** before picking the file. While the code plays, the bar at
+the top has two more controls. Each is remembered on that device:
 
 - **Resolution (Low / Medium / High):** lower resolution draws bigger symbols, which weaker
   cameras read more easily, but each frame carries less, so the transfer takes more frames
   (Low carries about 44% of High, Medium about 70%). The receiver follows a change by itself.
+  In QR mode the same buttons choose 200, 400 or 600 bytes per QR code.
 - **Speed (5 / 8 / 12 / 15 fps):** slower keeps each frame on screen longer.
 
 The code also moves a few pixels every frame. That is libcimbar's design, not a glitch: it
@@ -120,6 +127,7 @@ page reloads itself once the new version has installed, except while a transfer 
 
 ```sh
 go test ./...                                     # server, headers, service worker
+(cd qr && go test ./...)                          # QR codec: QR round trips, fountain coverage, bad frames
 node --test --test-concurrency=1 test/browser/    # pages in headless Chromium (Node 22+, chromium on PATH)
 ```
 
@@ -131,10 +139,13 @@ camera, and check the saved file byte for byte. They also check offline use and 
 - [libcimbar](https://github.com/sz3/libcimbar) by sz3: the encoder and decoder (MPL-2.0).
   Its WASM build includes OpenCV, zstd, wirehair, libcorrect and others; their licenses are in
   [`web/vendor/cimbar/third_party/`](web/vendor/cimbar/third_party/).
+- [txqr](https://github.com/divan/txqr) by divan: the QR code protocol (MIT), built to
+  WebAssembly with go-qrcode, gozxing and gofountain; see [`web/vendor/qr/`](web/vendor/qr/).
 - [Unbounded](https://github.com/googlefonts/unbounded) typeface (SIL OFL 1.1).
 
 ## License
 
 Lumen Drop's own code is [MIT](LICENSE). Bundled files keep their licenses:
 `web/vendor/cimbar/` is MPL-2.0 (unmodified libcimbar release files; see its
-[README](web/vendor/cimbar/README.md) for the source and how to upgrade), and `web/fonts/` is OFL-1.1.
+[README](web/vendor/cimbar/README.md) for the source and how to upgrade), `web/vendor/qr/` lists
+the licenses of what `qr.wasm` contains, and `web/fonts/` is OFL-1.1.

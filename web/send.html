@@ -21,8 +21,18 @@
 
     <section class="panel drop" id="drop">
       <input type="file" id="file" class="visually-hidden" tabindex="-1">
+      <div class="format" role="group" aria-label="Code type">
+        <button type="button" class="format__option" data-format="color" aria-pressed="true">
+          <span class="format__title">Color code</span>
+          <span class="format__desc">Fastest. Files up to about 20 MB.</span>
+        </button>
+        <button type="button" class="format__option" data-format="qr" aria-pressed="false">
+          <span class="format__title">QR code</span>
+          <span class="format__desc">Slower, but almost any camera reads it. Files up to 1 MB.</span>
+        </button>
+      </div>
       <button type="button" class="btn btn--primary" id="choose" disabled>Loading encoder…</button>
-      <p class="note">Or drop a file anywhere on this page. Files up to about 20 MB work best.</p>
+      <p class="note">Or drop a file anywhere on this page.</p>
     </section>
 
     <p class="error" id="error" role="alert" hidden></p>
@@ -49,11 +59,13 @@
     </div>
     <div class="stage__area" id="area">
       <canvas id="canvas"></canvas>
+      <canvas id="qr-canvas"></canvas>
       <p class="stage__note">Preparing file…</p>
     </div>
   </div>
 
   <script src="js/ui.js"></script>
+  <script src="js/qr-send.js"></script>
   <script src="js/send.js"></script>
   <script src="vendor/cimbar/send.2026-11-18T0531.js"></script>
   <script src="vendor/cimbar/cimbar_js.2026-11-18T0531.js"></script>

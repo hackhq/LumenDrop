@@ -11,6 +11,11 @@
   const MODE_KEY = "lumen-send-mode";
   const DEFAULT_FPS = 15;
   const FPS_KEY = "lumen-send-fps";
+  // Code type: libcimbar's color code, or txqr QR codes (js/qr-send.js). In QR mode the
+  // resolution buttons pick the bytes per QR code, measured to stay readable (see qr/codec).
+  const FORMATS = ["color", "qr"];
+  const FORMAT_KEY = "lumen-send-format";
+  const QR_CHUNKS = { 66: 200, 67: 400, 68: 600 };
   const TITLE = document.title;
 
   const canvas = UI.$("#canvas");
@@ -27,6 +32,8 @@
   let outcome = null;    // first decisive encode result of the current import: 0 = ready, < 0 = failed
   let pending = null;    // a file picked meanwhile; starts when the current import ends
   let currentFile = null; // the file on screen, re-encoded when the symbol size changes
+  let currentMode = DEFAULT_MODE;
+  let format = "color";
 
   function showError(message) {
     stage.hidden = true;
@@ -68,6 +75,7 @@
     document.title = `Sending ${file.name} - Lumen Drop`;
 
     stage.hidden = false;
+    stage.classList.toggle("is-qr", format === "qr");
     UI.setState("playing");
     UI.enterFullscreen();
     fit();
@@ -76,9 +84,28 @@
     encode(file);
   }
 
+  async function playQR(file) {
+    stage.classList.add("is-preparing");
+    if (file.size > QRSend.maxFileSize) {
+      showError("QR code mode takes files up to 1 MB. Choose Color code for bigger files.");
+      return;
+    }
+    const result = await QRSend.start(file, QR_CHUNKS[currentMode]);
+    if (currentFile !== file || document.body.dataset.state !== "playing") return; // stopped meanwhile
+    if (result.error) {
+      showError(`Lumen Drop couldn't prepare the QR codes (${result.error}).`);
+      return;
+    }
+    stage.classList.remove("is-preparing");
+  }
+
   // libcimbar's import can't be cancelled and feeds one shared compressor, so a
   // second import must wait for the first to end or their bytes would mix.
   function encode(file) {
+    if (format === "qr") {
+      playQR(file);
+      return;
+    }
     stage.classList.add("is-preparing");
     if (importing) pending = file;
     else begin(file);
@@ -117,6 +144,7 @@
 
   function stop() {
     currentFile = null;
+    QRSend.stop();
     stage.hidden = true;
     UI.setState("pick");
     UI.exitFullscreen();
@@ -130,12 +158,14 @@
   // frames (slow shutter in dim rooms, slow LCDs). Changes apply immediately.
   function setSpeed(fps) {
     Send.setFPS(fps);
+    QRSend.setFps(fps);
     for (const b of document.querySelectorAll("[data-fps]")) {
       b.setAttribute("aria-pressed", String(Number(b.dataset.fps) === fps));
     }
   }
 
   function setSymbolMode(mode) {
+    currentMode = mode;
     Send.setMode(mode); // reports the new aspect ratio, which re-fits the canvas
     for (const b of document.querySelectorAll("[data-mode]")) {
       b.setAttribute("aria-pressed", String(Number(b.dataset.mode) === mode));
@@ -150,6 +180,23 @@
       // storage unavailable: use the default
     }
     return DEFAULT_MODE;
+  }
+
+  function setFormat(value) {
+    format = value;
+    for (const b of document.querySelectorAll("[data-format]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.format === value));
+    }
+  }
+
+  function initialFormat() {
+    try {
+      const saved = localStorage.getItem(FORMAT_KEY);
+      if (FORMATS.includes(saved)) return saved;
+    } catch {
+      // storage unavailable: use the default
+    }
+    return "color";
   }
 
   function initialSpeed() {
@@ -223,6 +270,17 @@
       if (currentFile && document.body.dataset.state === "playing") encode(currentFile);
     });
   }
+  for (const b of document.querySelectorAll("[data-format]")) {
+    b.addEventListener("click", () => {
+      setFormat(b.dataset.format);
+      try {
+        localStorage.setItem(FORMAT_KEY, b.dataset.format);
+      } catch {
+        // not remembered; still applies now
+      }
+    });
+  }
+  setFormat(initialFormat());
   for (const b of document.querySelectorAll("[data-fps]")) {
     b.addEventListener("click", () => {
       const fps = Number(b.dataset.fps);
